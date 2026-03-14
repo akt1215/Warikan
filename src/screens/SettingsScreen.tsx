@@ -154,7 +154,7 @@ export const SettingsScreen = (): React.JSX.Element => {
         <View style={styles.cardBody}>
           <Typography variant="bodySmall">Cloud Sync Setup (Firebase)</Typography>
           <Typography variant="caption">
-            Optional: if `SCRIPT_FIREBASE_CONFIG` is filled in code, users do not need to set fields below.
+            Keep secrets out of git. Prefer `.env.local` or saving config on this device only.
           </Typography>
           <Input
             label="API Key"

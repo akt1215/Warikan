@@ -58,8 +58,9 @@ npm run ios
 
 ## Cloud sync (without QR)
 
-- Recommended for teams: set `SCRIPT_FIREBASE_CONFIG` once in `src/services/firebase.ts` so every user shares one preconfigured cloud project.
-- You can also configure Firebase via `EXPO_PUBLIC_FIREBASE_*` env vars or in-app via **Settings → Sync → Cloud Sync Setup**.
+- Do **not** commit Firebase secrets to git.
+- Preferred setup: create `.env.local` (gitignored) using `.env.example` and set `EXPO_PUBLIC_FIREBASE_*` values there.
+- You can also configure Firebase on-device via **Settings → Sync → Cloud Sync Setup**.
 - In Firebase Console, enable:
   - **Authentication → Sign-in method → Anonymous**
   - **Firestore Database**

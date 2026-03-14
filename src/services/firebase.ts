@@ -75,14 +75,15 @@ const FIREBASE_ACQUISITION_COLLECTION = 'user_acquisitions';
 const FIREBASE_CONFIG_STORAGE_KEY = '@warikan/firebase-config';
 
 // One-time script-level Firebase config shared by all users of this app build.
-// Fill these fields once and ship; users won't need to enter config in Settings.
+// SECURITY: keep real values out of git. Prefer EXPO_PUBLIC_FIREBASE_* env vars
+// (e.g. .env.local ignored by git) or runtime setup from Settings.
 const SCRIPT_FIREBASE_CONFIG: FirebaseRuntimeConfigInput = {
-  apiKey: 'AIzaSyCk60q_KPQuNKh9_azQ6ocQV-aORJ7WN-g',
-  authDomain: 'warikan-6ef63.firebaseapp.com',
-  projectId: 'warikan-6ef63',
-  storageBucket: 'warikan-6ef63.firebasestorage.app',
-  messagingSenderId: '529717198331',
-  appId: '1:529717198331:web:49b73d1666dad5a35edf5e',
+  apiKey: '',
+  authDomain: '',
+  projectId: '',
+  storageBucket: '',
+  messagingSenderId: '',
+  appId: '',
 };
 
 const chunkArray = <T>(entries: ReadonlyArray<T>, size: number): T[][] => {
