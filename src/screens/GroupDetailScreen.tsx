@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { Alert, ScrollView, StyleSheet, View } from 'react-native';
 import { useRoute } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
 
@@ -12,8 +12,9 @@ import { useGroupStore, useTransactionStore, useUserStore } from '../store';
 export const GroupDetailScreen = (): React.JSX.Element => {
   const route = useRoute<RouteProp<RootStackParamList, 'GroupDetail'>>();
   const groups = useGroupStore((state) => state.groups);
-  const loadGroups = useGroupStore((state) => state.loadGroups);
+  const refreshGroupMembers = useGroupStore((state) => state.refreshGroupMembers);
   const transactions = useTransactionStore((state) => state.transactions);
+  const deleteTransaction = useTransactionStore((state) => state.deleteTransaction);
   const user = useUserStore((state) => state.user);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
@@ -34,7 +35,21 @@ export const GroupDetailScreen = (): React.JSX.Element => {
 
     setIsRefreshing(true);
     try {
-      await loadGroups(user.id);
+      const result = await refreshGroupMembers(user.id, route.params.groupId);
+
+      if (!result.group) {
+        Alert.alert('Refresh failed', 'Could not find this group anymore.');
+      } else if (!result.cloudSynced) {
+        Alert.alert(
+          'Refreshed locally',
+          'Cloud sync is not configured, so members were refreshed from local data only.',
+        );
+      }
+    } catch (error) {
+      Alert.alert(
+        'Refresh failed',
+        error instanceof Error ? error.message : 'Could not refresh members.',
+      );
     } finally {
       setIsRefreshing(false);
     }
@@ -63,11 +78,43 @@ export const GroupDetailScreen = (): React.JSX.Element => {
           <Typography variant="bodySmall">No transactions in this group yet.</Typography>
         ) : (
           groupTransactions.map((transaction) => (
-            <TransactionCard
-              baseCurrency={user?.baseCurrency ?? 'USD'}
-              key={transaction.id}
-              transaction={transaction}
-            />
+            <View key={transaction.id} style={styles.transactionItem}>
+              <TransactionCard
+                baseCurrency={user?.baseCurrency ?? 'USD'}
+                transaction={transaction}
+              />
+              {user && transaction.createdBy === user.id ? (
+                <Button
+                  onPress={() => {
+                    Alert.alert(
+                      'Delete transaction?',
+                      'This action cannot be undone.',
+                      [
+                        { text: 'Cancel', style: 'cancel' },
+                        {
+                          text: 'Delete',
+                          style: 'destructive',
+                          onPress: () => {
+                            void (async () => {
+                              try {
+                                await deleteTransaction(transaction.id, user.id);
+                              } catch (error) {
+                                Alert.alert(
+                                  'Could not delete',
+                                  error instanceof Error ? error.message : 'Unknown error.',
+                                );
+                              }
+                            })();
+                          },
+                        },
+                      ],
+                    );
+                  }}
+                  title="Delete"
+                  variant="danger"
+                />
+              ) : null}
+            </View>
           ))
         )}
       </View>
@@ -87,5 +134,8 @@ const styles = StyleSheet.create({
   transactionList: {
     gap: spacing.sm,
     marginTop: spacing.md,
+  },
+  transactionItem: {
+    gap: spacing.sm,
   },
 });

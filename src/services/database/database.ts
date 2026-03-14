@@ -61,9 +61,17 @@ CREATE TABLE IF NOT EXISTS exchange_rates (
   updatedAt INTEGER NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS transaction_tombstones (
+  syncId TEXT PRIMARY KEY NOT NULL,
+  groupId TEXT NOT NULL,
+  deletedAt INTEGER NOT NULL,
+  deletedBy TEXT NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_groups_createdBy ON groups(createdBy);
 CREATE INDEX IF NOT EXISTS idx_transactions_groupId ON transactions(groupId);
 CREATE INDEX IF NOT EXISTS idx_transactions_syncId ON transactions(syncId);
+CREATE INDEX IF NOT EXISTS idx_transaction_tombstones_groupId ON transaction_tombstones(groupId);
 CREATE INDEX IF NOT EXISTS idx_currency_acquisitions_user_currency ON currency_acquisitions(userId, currency);
 `;
 

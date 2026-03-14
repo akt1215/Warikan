@@ -33,6 +33,7 @@ export const AddTransactionScreen = (): React.JSX.Element => {
   const addTransaction = useTransactionStore((state) => state.addTransaction);
 
   const acquisitions = useCurrencyStore((state) => state.acquisitions);
+  const allAcquisitions = useCurrencyStore((state) => state.allAcquisitions);
   const loadAcquisitions = useCurrencyStore((state) => state.loadAcquisitions);
   const refreshMarketRates = useCurrencyStore((state) => state.refreshMarketRates);
   const getMarketRate = useCurrencyStore((state) => state.getMarketRate);
@@ -307,7 +308,8 @@ export const AddTransactionScreen = (): React.JSX.Element => {
         fee: parsedFee,
         fromCurrency: currency,
         baseCurrency: user.baseCurrency,
-        acquisitions,
+        acquisitions: allAcquisitions,
+        acquisitionOwnerId: selectedPayerId,
         marketRate,
       });
 

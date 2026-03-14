@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NavigationProp } from '@react-navigation/native';
@@ -6,16 +6,35 @@ import type { NavigationProp } from '@react-navigation/native';
 import { Button, Card, Input, Picker, Typography } from '../components/common';
 import { CURRENCY_LABELS, colors, spacing, SUPPORTED_CURRENCIES } from '../constants';
 import type { RootStackParamList } from '../navigation/types';
-import { useCurrencyStore, useUserStore } from '../store';
+import { firebaseService } from '../services';
+import { useCurrencyStore, useGroupStore, useTransactionStore, useUserStore } from '../store';
+import { isTravelGroup } from '../utils';
 
 export const SettingsScreen = (): React.JSX.Element => {
   const navigation = useNavigation<NavigationProp<RootStackParamList>>();
   const user = useUserStore((state) => state.user);
   const updateProfile = useUserStore((state) => state.updateProfile);
+  const loadAcquisitions = useCurrencyStore((state) => state.loadAcquisitions);
   const refreshRates = useCurrencyStore((state) => state.refreshMarketRates);
+  const loadGroups = useGroupStore((state) => state.loadGroups);
+  const reconcileMembersFromTransactions = useGroupStore(
+    (state) => state.reconcileMembersFromTransactions,
+  );
+  const loadTransactions = useTransactionStore((state) => state.loadTransactions);
+  const replaceTransactions = useTransactionStore((state) => state.replaceTransactions);
+  const upsertTombstones = useTransactionStore((state) => state.upsertTombstones);
+  const replaceSyncedUserAcquisitions = useCurrencyStore(
+    (state) => state.replaceSyncedUserAcquisitions,
+  );
 
   const [name, setName] = useState(user?.name ?? '');
   const [baseCurrency, setBaseCurrency] = useState(user?.baseCurrency ?? 'USD');
+  const [firebaseApiKey, setFirebaseApiKey] = useState('');
+  const [firebaseAuthDomain, setFirebaseAuthDomain] = useState('');
+  const [firebaseProjectId, setFirebaseProjectId] = useState('');
+  const [firebaseStorageBucket, setFirebaseStorageBucket] = useState('');
+  const [firebaseMessagingSenderId, setFirebaseMessagingSenderId] = useState('');
+  const [firebaseAppId, setFirebaseAppId] = useState('');
 
   const currencyOptions = useMemo(() => {
     return SUPPORTED_CURRENCIES.map((currency) => ({
@@ -40,6 +59,52 @@ export const SettingsScreen = (): React.JSX.Element => {
     });
 
     Alert.alert('Saved', 'Profile updated.');
+  };
+
+  useEffect(() => {
+    void (async () => {
+      const runtimeConfig = await firebaseService.getRuntimeConfigInput();
+      if (!runtimeConfig) {
+        return;
+      }
+
+      setFirebaseApiKey(runtimeConfig.apiKey);
+      setFirebaseAuthDomain(runtimeConfig.authDomain);
+      setFirebaseProjectId(runtimeConfig.projectId);
+      setFirebaseStorageBucket(runtimeConfig.storageBucket);
+      setFirebaseMessagingSenderId(runtimeConfig.messagingSenderId);
+      setFirebaseAppId(runtimeConfig.appId);
+    })();
+  }, []);
+
+  const saveCloudConfig = async (): Promise<void> => {
+    try {
+      await firebaseService.setRuntimeConfig({
+        apiKey: firebaseApiKey,
+        authDomain: firebaseAuthDomain,
+        projectId: firebaseProjectId,
+        storageBucket: firebaseStorageBucket,
+        messagingSenderId: firebaseMessagingSenderId,
+        appId: firebaseAppId,
+      });
+      Alert.alert('Saved', 'Cloud config saved. You can run Cloud Sync now.');
+    } catch (error) {
+      Alert.alert(
+        'Could not save cloud config',
+        error instanceof Error ? error.message : 'Unknown error.',
+      );
+    }
+  };
+
+  const clearCloudConfig = async (): Promise<void> => {
+    await firebaseService.clearRuntimeConfig();
+    setFirebaseApiKey('');
+    setFirebaseAuthDomain('');
+    setFirebaseProjectId('');
+    setFirebaseStorageBucket('');
+    setFirebaseMessagingSenderId('');
+    setFirebaseAppId('');
+    Alert.alert('Cleared', 'Saved cloud config removed. Env vars still work if set.');
   };
 
   return (
@@ -87,11 +152,116 @@ export const SettingsScreen = (): React.JSX.Element => {
       <Card>
         <Typography variant="h4">Sync</Typography>
         <View style={styles.cardBody}>
+          <Typography variant="bodySmall">Cloud Sync Setup (Firebase)</Typography>
+          <Typography variant="caption">
+            Optional: if `SCRIPT_FIREBASE_CONFIG` is filled in code, users do not need to set fields below.
+          </Typography>
+          <Input
+            label="API Key"
+            onChangeText={setFirebaseApiKey}
+            value={firebaseApiKey}
+          />
+          <Input
+            label="Auth Domain"
+            onChangeText={setFirebaseAuthDomain}
+            value={firebaseAuthDomain}
+          />
+          <Input
+            label="Project ID"
+            onChangeText={setFirebaseProjectId}
+            value={firebaseProjectId}
+          />
+          <Input
+            label="Storage Bucket"
+            onChangeText={setFirebaseStorageBucket}
+            value={firebaseStorageBucket}
+          />
+          <Input
+            label="Messaging Sender ID"
+            onChangeText={setFirebaseMessagingSenderId}
+            value={firebaseMessagingSenderId}
+          />
+          <Input
+            label="App ID"
+            onChangeText={setFirebaseAppId}
+            value={firebaseAppId}
+          />
+          <Button
+            onPress={() => {
+              void saveCloudConfig();
+            }}
+            title="Save Cloud Config"
+            variant="secondary"
+          />
+          <Button
+            onPress={() => {
+              void clearCloudConfig();
+            }}
+            title="Clear Saved Cloud Config"
+            variant="secondary"
+          />
           <Button
             onPress={() => {
               navigation.navigate('QRSync');
             }}
             title="QR Sync"
+            variant="secondary"
+          />
+          <Button
+            onPress={() => {
+              if (!user) {
+                return;
+              }
+
+              void (async () => {
+                try {
+                  await loadGroups(user.id);
+                  await loadAcquisitions(user.id);
+                  await loadTransactions();
+                  const groups = useGroupStore.getState().groups;
+                  const transactions = useTransactionStore.getState().transactions;
+                  const tombstones = useTransactionStore.getState().tombstones;
+                  const currentUserAcquisitions = useCurrencyStore.getState().acquisitions;
+                  const travelGroupIds = groups
+                    .filter(isTravelGroup)
+                    .map((group) => group.id);
+
+                  const result = await firebaseService.syncTransactions(
+                    transactions,
+                    travelGroupIds,
+                    groups,
+                    tombstones,
+                    user.id,
+                    currentUserAcquisitions,
+                  );
+                  await replaceTransactions(result.merged);
+                  await upsertTombstones(result.tombstones);
+                  for (const [syncedUserId, syncedAcquisitions] of Object.entries(result.acquisitionsByUser)) {
+                    await replaceSyncedUserAcquisitions(
+                      user.id,
+                      syncedUserId,
+                      syncedAcquisitions,
+                    );
+                  }
+                  const reconciliation = await reconcileMembersFromTransactions(
+                    user.id,
+                    result.merged,
+                    result.participantProfiles,
+                  );
+
+                  Alert.alert(
+                    result.success ? 'Cloud sync complete' : 'Cloud sync skipped',
+                    `${result.message} Added ${result.added}, updated ${result.updated}, skipped ${result.skipped}. Members added ${reconciliation.membersAdded} across ${reconciliation.groupsUpdated} group(s).`,
+                  );
+                } catch (error) {
+                  Alert.alert(
+                    'Cloud sync failed',
+                    error instanceof Error ? error.message : 'Unknown error.',
+                  );
+                }
+              })();
+            }}
+            title="Cloud Sync"
             variant="secondary"
           />
         </View>

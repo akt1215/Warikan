@@ -12,8 +12,8 @@ interface DeleteGroupModalProps {
   selectedMigrationTargetId: string;
   onChangeMigrationTarget: (groupId: string) => void;
   onMigrate: () => void;
-  onDeleteAnyway: () => void;
-  onClose: () => void;
+  onDeleteWithoutMigration: () => void;
+  onCancel: () => void;
 }
 
 export const DeleteGroupModal = ({
@@ -24,11 +24,11 @@ export const DeleteGroupModal = ({
   selectedMigrationTargetId,
   onChangeMigrationTarget,
   onMigrate,
-  onDeleteAnyway,
-  onClose,
+  onDeleteWithoutMigration,
+  onCancel,
 }: DeleteGroupModalProps): React.JSX.Element => {
   return (
-    <Modal onClose={onClose} title="Delete Group" visible={visible}>
+    <Modal onClose={onCancel} title="Delete Group" visible={visible}>
       <View style={styles.content}>
         <Typography variant="bodySmall">
           "{groupName}" has {transactionCount} transaction
@@ -46,13 +46,9 @@ export const DeleteGroupModal = ({
         />
         <Button onPress={onMigrate} title="Migrate & Delete Group" />
 
-        <Button
-          onPress={onDeleteAnyway}
-          title="Option 2: Move to another travel group & Delete"
-          variant="danger"
-        />
+        <Button onPress={onDeleteWithoutMigration} title="Option 2: Skip migration & Delete group" variant="danger" />
 
-        <Button onPress={onClose} title="Option 3: Skip" variant="ghost" />
+        <Button onPress={onCancel} title="Option 3: Cancel deletion" variant="ghost" />
       </View>
     </Modal>
   );

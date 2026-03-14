@@ -22,6 +22,11 @@ interface TransactionRow {
   syncId: string;
 }
 
+interface TransactionDeletionRow {
+  syncId: string;
+  groupId: string;
+}
+
 const parseSplits = (raw: string): Transaction['splits'] => {
   try {
     const parsed: unknown = JSON.parse(raw);
@@ -279,4 +284,80 @@ export const moveTransactionsToGroup = async (
       $sourceGroupId: sourceGroupId,
     },
   );
+};
+
+export interface DeletedTransactionMeta {
+  syncId: string;
+  groupId: string;
+}
+
+export interface DeleteTransactionsByGroupResult {
+  deletedCount: number;
+  deletedTransactions: DeletedTransactionMeta[];
+}
+
+export const deleteTransactionRecord = async (
+  transactionId: string,
+  createdBy: string,
+): Promise<DeletedTransactionMeta | null> => {
+  const database = await getDatabase();
+  const target = await database.getFirstAsync<TransactionDeletionRow>(
+    `SELECT syncId, groupId
+     FROM transactions
+     WHERE id = $id AND createdBy = $createdBy`,
+    {
+      $id: transactionId,
+      $createdBy: createdBy,
+    },
+  );
+
+  if (!target) {
+    return null;
+  }
+
+  const result = await database.runAsync(
+    `DELETE FROM transactions
+     WHERE id = $id AND createdBy = $createdBy`,
+    {
+      $id: transactionId,
+      $createdBy: createdBy,
+    },
+  );
+
+  if (result.changes <= 0) {
+    return null;
+  }
+
+  return {
+    syncId: target.syncId,
+    groupId: target.groupId,
+  };
+};
+
+export const deleteTransactionsByGroup = async (
+  groupId: string,
+): Promise<DeleteTransactionsByGroupResult> => {
+  const database = await getDatabase();
+  const deletedTransactions = await database.getAllAsync<TransactionDeletionRow>(
+    `SELECT syncId, groupId
+     FROM transactions
+     WHERE groupId = $groupId`,
+    { $groupId: groupId },
+  );
+
+  const result = await database.runAsync(
+    `DELETE FROM transactions
+     WHERE groupId = $groupId`,
+    {
+      $groupId: groupId,
+    },
+  );
+
+  return {
+    deletedCount: result.changes,
+    deletedTransactions: deletedTransactions.map((entry) => ({
+      syncId: entry.syncId,
+      groupId: entry.groupId,
+    })),
+  };
 };

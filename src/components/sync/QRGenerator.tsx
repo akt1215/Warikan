@@ -1,9 +1,10 @@
-import React from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
 import QRCode from 'react-native-qrcode-svg';
 
 import { colors, spacing, typography } from '../../constants';
-import { Card } from '../common';
+import { Button, Card } from '../common';
 
 interface QRGeneratorProps {
   payload: string;
@@ -14,8 +15,39 @@ export const QRGenerator = ({
   payload,
   title = 'Generated Sync Payload',
 }: QRGeneratorProps): React.JSX.Element => {
+  const [copied, setCopied] = useState(false);
   const normalizedPayload = payload.trim();
   const isPayloadTooLarge = normalizedPayload.length > 1800;
+
+  useEffect(() => {
+    if (!copied) {
+      return;
+    }
+
+    const timeoutId = setTimeout(() => {
+      setCopied(false);
+    }, 1500);
+
+    return () => {
+      clearTimeout(timeoutId);
+    };
+  }, [copied]);
+
+  const handleCopyPayload = async (): Promise<void> => {
+    if (!normalizedPayload) {
+      return;
+    }
+
+    try {
+      await Clipboard.setStringAsync(normalizedPayload);
+      setCopied(true);
+    } catch (error) {
+      Alert.alert(
+        'Copy failed',
+        error instanceof Error ? error.message : 'Could not copy payload.',
+      );
+    }
+  };
 
   return (
     <Card>
@@ -38,6 +70,13 @@ export const QRGenerator = ({
               {normalizedPayload}
             </Text>
           </ScrollView>
+          <Button
+            onPress={() => {
+              void handleCopyPayload();
+            }}
+            title={copied ? 'Copied' : 'Copy Payload'}
+            variant="secondary"
+          />
         </View>
       )}
     </Card>

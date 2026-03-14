@@ -1,18 +1,37 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Alert, ScrollView, StyleSheet } from 'react-native';
 
 import { QRGenerator, QRScanner } from '../components/sync';
 import { Button, Card, Typography } from '../components/common';
 import { colors, spacing } from '../constants';
-import { useSyncStore, useTransactionStore, useUserStore } from '../store';
+import {
+  applyTransactionTombstones,
+  mergeTransactionTombstones,
+  parseSyncPayload,
+  refreshTransactionsForBalance,
+} from '../services';
+import { useCurrencyStore, useGroupStore, useSyncStore, useTransactionStore, useUserStore } from '../store';
 
 export const QRSyncScreen = (): React.JSX.Element => {
   const user = useUserStore((state) => state.user);
   const setLastSyncedAt = useUserStore((state) => state.setLastSyncedAt);
+  const groups = useGroupStore((state) => state.groups);
+  const loadGroups = useGroupStore((state) => state.loadGroups);
+  const reconcileMembersFromTransactions = useGroupStore(
+    (state) => state.reconcileMembersFromTransactions,
+  );
+  const acquisitions = useCurrencyStore((state) => state.acquisitions);
+  const loadAcquisitions = useCurrencyStore((state) => state.loadAcquisitions);
+  const replaceSyncedUserAcquisitions = useCurrencyStore(
+    (state) => state.replaceSyncedUserAcquisitions,
+  );
+  const getMarketRate = useCurrencyStore((state) => state.getMarketRate);
 
   const transactions = useTransactionStore((state) => state.transactions);
+  const tombstones = useTransactionStore((state) => state.tombstones);
   const loadTransactions = useTransactionStore((state) => state.loadTransactions);
   const replaceTransactions = useTransactionStore((state) => state.replaceTransactions);
+  const upsertTombstones = useTransactionStore((state) => state.upsertTombstones);
 
   const generatePayload = useSyncStore((state) => state.generatePayload);
   const mergePayload = useSyncStore((state) => state.mergePayload);
@@ -25,12 +44,50 @@ export const QRSyncScreen = (): React.JSX.Element => {
     void loadTransactions();
   }, [loadTransactions]);
 
+  useEffect(() => {
+    if (!user) {
+      return;
+    }
+
+    void loadGroups(user.id);
+    void loadAcquisitions(user.id);
+  }, [loadAcquisitions, loadGroups, user]);
+
+  const participantProfiles = useMemo(() => {
+    const profiles: Record<string, string> = {};
+
+    if (user) {
+      profiles[user.id] = user.name;
+    }
+
+    for (const group of groups) {
+      for (const member of group.members) {
+        const memberId = member.id.trim();
+        const memberName = member.name.trim();
+        if (!memberId || !memberName) {
+          continue;
+        }
+
+        profiles[memberId] = memberName;
+      }
+    }
+
+    return profiles;
+  }, [groups, user]);
+
   const handleGenerate = (): void => {
     if (!user) {
       return;
     }
 
-    const payload = generatePayload(user.id, transactions, user.lastSyncedAt);
+    const payload = generatePayload(
+      user.id,
+      transactions,
+      user.lastSyncedAt,
+      participantProfiles,
+      tombstones,
+      acquisitions,
+    );
     setGeneratedPayload(payload);
   };
 
@@ -41,12 +98,54 @@ export const QRSyncScreen = (): React.JSX.Element => {
     }
 
     try {
+      const parsedPayload = parseSyncPayload(incomingPayload);
       const result = mergePayload(transactions, incomingPayload);
-      await replaceTransactions(result.merged);
+      const mergedTombstones = mergeTransactionTombstones(
+        tombstones,
+        parsedPayload.transactionTombstones ?? [],
+      );
+      const mergedTransactions = applyTransactionTombstones(
+        result.merged,
+        mergedTombstones,
+      );
+
+      if (user && parsedPayload.currencyAcquisitions) {
+        await replaceSyncedUserAcquisitions(
+          user.id,
+          parsedPayload.generatedBy,
+          parsedPayload.currencyAcquisitions,
+        );
+      }
+
+      const refreshed = user
+        ? refreshTransactionsForBalance({
+          transactions: mergedTransactions,
+          baseCurrency: user.baseCurrency,
+          acquisitions: useCurrencyStore.getState().allAcquisitions,
+          getMarketRate,
+        }).transactions
+        : mergedTransactions;
+
+      await replaceTransactions(refreshed);
+      await upsertTombstones(mergedTombstones);
+
+      let membersSummary = '';
+      if (user) {
+        const reconciliation = await reconcileMembersFromTransactions(
+          user.id,
+          refreshed,
+          parsedPayload.participantProfiles,
+        );
+
+        if (reconciliation.membersAdded > 0) {
+          membersSummary = ` Added ${reconciliation.membersAdded} member(s) across ${reconciliation.groupsUpdated} group(s).`;
+        }
+      }
+
       await setLastSyncedAt(Date.now());
       Alert.alert(
         'Merge complete',
-        `Added ${result.added}, updated ${result.updated}, skipped ${result.skipped}.`,
+        `Added ${result.added}, updated ${result.updated}, skipped ${result.skipped}.${membersSummary}`,
       );
     } catch (error) {
       Alert.alert('Merge failed', error instanceof Error ? error.message : 'Invalid payload.');

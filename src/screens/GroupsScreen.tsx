@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { StackNavigationProp } from '@react-navigation/stack';
+import * as Clipboard from 'expo-clipboard';
 
 import { DeleteGroupModal, GroupCard } from '../components/group';
 import { QRGenerator, QRScanner } from '../components/sync';
@@ -21,13 +22,16 @@ export const GroupsScreen = (): React.JSX.Element => {
   const deleteGroup = useGroupStore((state) => state.deleteGroup);
   const generateInviteForGroup = useGroupStore((state) => state.generateInviteForGroup);
   const joinGroupFromInvite = useGroupStore((state) => state.joinGroupFromInvite);
+  const refreshGroupMembers = useGroupStore((state) => state.refreshGroupMembers);
   const countTransactionsInGroup = useTransactionStore((state) => state.countTransactionsInGroup);
+  const deleteTransactionsByGroup = useTransactionStore((state) => state.deleteTransactionsByGroup);
   const moveTransactionsToGroup = useTransactionStore((state) => state.moveTransactionsToGroup);
 
   const [newGroupName, setNewGroupName] = useState('');
   const [selectedInviteGroupId, setSelectedInviteGroupId] = useState('');
   const [generatedInvitePayload, setGeneratedInvitePayload] = useState('');
   const [generatedPassphrase, setGeneratedPassphrase] = useState('');
+  const [isPassphraseCopied, setIsPassphraseCopied] = useState(false);
   const [inviteInput, setInviteInput] = useState('');
   const [deletingGroupId, setDeletingGroupId] = useState<string | null>(null);
   const [deletingGroupTransactionCount, setDeletingGroupTransactionCount] = useState(0);
@@ -55,6 +59,20 @@ export const GroupsScreen = (): React.JSX.Element => {
       setSelectedInviteGroupId(travelGroups[0]?.id ?? '');
     }
   }, [selectedInviteGroupId, travelGroups]);
+
+  useEffect(() => {
+    if (!isPassphraseCopied) {
+      return;
+    }
+
+    const timeoutId = setTimeout(() => {
+      setIsPassphraseCopied(false);
+    }, 1500);
+
+    return () => {
+      clearTimeout(timeoutId);
+    };
+  }, [isPassphraseCopied]);
 
   const groupOptions = useMemo(() => {
     return travelGroups.map((group) => ({
@@ -140,23 +158,13 @@ export const GroupsScreen = (): React.JSX.Element => {
     }
   };
 
-  const handleDeleteAnyway = async (): Promise<void> => {
-    if (!deletingGroupId) {
-      return;
-    }
-
-    const fallbackTarget = travelGroups.find((group) => group.id !== deletingGroupId);
-
-    if (!fallbackTarget) {
-      Alert.alert(
-        'No fallback group',
-        'Create another travel group first, then delete this one.',
-      );
+  const handleDeleteWithoutMigration = async (): Promise<void> => {
+    if (!deletingGroupId || !user) {
       return;
     }
 
     try {
-      await moveTransactionsToGroup(deletingGroupId, fallbackTarget.id);
+      await deleteTransactionsByGroup(deletingGroupId, user.id);
       await deleteGroup(deletingGroupId);
       closeDeleteModal();
     } catch (error) {
@@ -174,8 +182,26 @@ export const GroupsScreen = (): React.JSX.Element => {
       const invite = generateInviteForGroup(selectedInviteGroupId);
       setGeneratedInvitePayload(invite.payload);
       setGeneratedPassphrase(invite.passphrase);
+      setIsPassphraseCopied(false);
     } catch (error) {
       Alert.alert('Invite failed', error instanceof Error ? error.message : 'Could not generate invite.');
+    }
+  };
+
+  const handleCopyPassphrase = async (): Promise<void> => {
+    if (!generatedPassphrase.trim()) {
+      Alert.alert('No passphrase', 'Generate an invite first.');
+      return;
+    }
+
+    try {
+      await Clipboard.setStringAsync(generatedPassphrase);
+      setIsPassphraseCopied(true);
+    } catch (error) {
+      Alert.alert(
+        'Copy failed',
+        error instanceof Error ? error.message : 'Could not copy passphrase.',
+      );
     }
   };
 
@@ -191,9 +217,26 @@ export const GroupsScreen = (): React.JSX.Element => {
 
     try {
       const group = await joinGroupFromInvite(user.id, user.name, inviteInput);
+      let cloudSyncWarning: string | null = null;
+
+      try {
+        await refreshGroupMembers(user.id, group.id);
+      } catch (error) {
+        cloudSyncWarning = error instanceof Error
+          ? error.message
+          : 'Cloud sync failed.';
+      }
+
       setInviteInput('');
       setSelectedInviteGroupId(group.id);
-      Alert.alert('Joined group', `You are now in "${group.name}".`);
+      if (cloudSyncWarning) {
+        Alert.alert(
+          'Joined locally',
+          `You are now in "${group.name}", but member cloud sync failed: ${cloudSyncWarning}`,
+        );
+      } else {
+        Alert.alert('Joined group', `You are now in "${group.name}".`);
+      }
     } catch (error) {
       Alert.alert('Join failed', error instanceof Error ? error.message : 'Invalid invite.');
     }
@@ -231,9 +274,18 @@ export const GroupsScreen = (): React.JSX.Element => {
           <Button onPress={handleGenerateInvite} title="Generate Invite" variant="secondary" />
 
           {generatedPassphrase ? (
-            <Typography selectable variant="bodySmall">
-              Passphrase: {generatedPassphrase}
-            </Typography>
+            <View style={styles.passphraseSection}>
+              <Typography selectable variant="bodySmall">
+                Passphrase: {generatedPassphrase}
+              </Typography>
+              <Button
+                onPress={() => {
+                  void handleCopyPassphrase();
+                }}
+                title={isPassphraseCopied ? 'Copied' : 'Copy Passphrase'}
+                variant="secondary"
+              />
+            </View>
           ) : null}
 
           {generatedInvitePayload ? (
@@ -285,9 +337,9 @@ export const GroupsScreen = (): React.JSX.Element => {
         groupName={deletingGroup?.name ?? 'Group'}
         migrationOptions={migrationOptions}
         onChangeMigrationTarget={setSelectedMigrationTargetId}
-        onClose={closeDeleteModal}
-        onDeleteAnyway={() => {
-          void handleDeleteAnyway();
+        onCancel={closeDeleteModal}
+        onDeleteWithoutMigration={() => {
+          void handleDeleteWithoutMigration();
         }}
         onMigrate={() => {
           void handleMigrateAndDelete();
@@ -318,5 +370,8 @@ const styles = StyleSheet.create({
   cardSection: {
     gap: spacing.sm,
     marginTop: spacing.md,
+  },
+  passphraseSection: {
+    gap: spacing.sm,
   },
 });

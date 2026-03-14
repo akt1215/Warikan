@@ -13,6 +13,7 @@ export interface ConvertCurrencyInput {
   fromCurrency: string;
   baseCurrency: string;
   acquisitions: ReadonlyArray<CurrencyAcquisition>;
+  acquisitionOwnerId?: string;
   marketRate?: number | null;
 }
 
@@ -58,6 +59,7 @@ export const convertToBaseCurrency = ({
   fromCurrency,
   baseCurrency,
   acquisitions,
+  acquisitionOwnerId,
   marketRate,
 }: ConvertCurrencyInput): number => {
   const total = new Decimal(amount).plus(fee);
@@ -67,7 +69,9 @@ export const convertToBaseCurrency = ({
   }
 
   const relevantAcquisitions = acquisitions.filter(
-    (acquisition) => acquisition.currency === fromCurrency,
+    (acquisition) =>
+      acquisition.currency === fromCurrency &&
+      (!acquisitionOwnerId || acquisition.userId === acquisitionOwnerId),
   );
 
   const averageRate = getAverageRate(relevantAcquisitions);

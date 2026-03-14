@@ -3,25 +3,40 @@ import { StyleSheet, Text, View } from 'react-native';
 
 import { colors, spacing, typography } from '../../constants';
 import { formatCurrency } from '../../utils';
-import { Card } from '../common';
+import { Button, Card } from '../common';
 import { PersonBalance } from './PersonBalance';
 
 interface BalanceOverviewProps {
   balances: Record<string, number>;
+  personNamesById?: Record<string, string>;
   totalOwedByYou: number;
   totalOwedToYou: number;
   currency: string;
+  onRefresh?: () => void;
+  isRefreshing?: boolean;
 }
 
 export const BalanceOverview = ({
   balances,
+  personNamesById = {},
   totalOwedByYou,
   totalOwedToYou,
   currency,
+  onRefresh,
+  isRefreshing = false,
 }: BalanceOverviewProps): React.JSX.Element => {
   return (
     <Card>
-      <Text style={styles.title}>Balance Overview</Text>
+      <View style={styles.headerRow}>
+        <Text style={styles.title}>Balance Overview</Text>
+        {onRefresh ? (
+          <Button
+            onPress={onRefresh}
+            title={isRefreshing ? 'Refreshing...' : 'Refresh'}
+            variant="secondary"
+          />
+        ) : null}
+      </View>
       <View style={styles.summaryRow}>
         <View>
           <Text style={styles.label}>You owe</Text>
@@ -46,7 +61,7 @@ export const BalanceOverview = ({
               amount={amount}
               currency={currency}
               key={personId}
-              personId={personId}
+              personName={personNamesById[personId] ?? personId}
             />
           ))
         )}
@@ -56,11 +71,16 @@ export const BalanceOverview = ({
 };
 
 const styles = StyleSheet.create({
+  headerRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: spacing.md,
+  },
   title: {
     color: colors.textPrimary,
     fontSize: typography.sizes.h4,
     fontWeight: typography.weights.semibold,
-    marginBottom: spacing.md,
   },
   summaryRow: {
     flexDirection: 'row',

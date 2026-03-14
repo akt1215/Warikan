@@ -5,13 +5,13 @@ import { colors, spacing, typography } from '../../constants';
 import { formatCurrency } from '../../utils';
 
 interface PersonBalanceProps {
-  personId: string;
+  personName: string;
   amount: number;
   currency: string;
 }
 
 export const PersonBalance = ({
-  personId,
+  personName,
   amount,
   currency,
 }: PersonBalanceProps): React.JSX.Element => {
@@ -19,7 +19,7 @@ export const PersonBalance = ({
 
   return (
     <View style={styles.row}>
-      <Text style={styles.person}>{personId}</Text>
+      <Text style={styles.person}>{personName}</Text>
       <Text style={[styles.amount, isPositive ? styles.positive : styles.negative]}>
         {isPositive ? 'They owe you' : 'You owe'} {formatCurrency(Math.abs(amount), currency)}
       </Text>

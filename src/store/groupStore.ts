@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-import type { Group, GroupMember } from '../types';
+import type { Group, GroupMember, Transaction } from '../types';
 import {
   createGroupRecord,
   deleteGroupRecord,
@@ -10,14 +10,26 @@ import {
 import {
   createGroupInvitePassphrase,
   createGroupInvitePayload,
+  firebaseService,
   mergeGroupMembers,
   parseGroupInviteInput,
+  reconcileGroupMembersFromTransactions,
 } from '../services';
 import { generateId } from '../utils';
 
 interface GroupInviteBundle {
   payload: string;
   passphrase: string;
+}
+
+interface GroupRefreshResult {
+  group: Group | null;
+  cloudSynced: boolean;
+}
+
+interface ReconcileMembersResult {
+  groupsUpdated: number;
+  membersAdded: number;
 }
 
 interface GroupStoreState {
@@ -32,6 +44,12 @@ interface GroupStoreState {
     userName: string,
     inviteInput: string,
   ) => Promise<Group>;
+  reconcileMembersFromTransactions: (
+    userId: string,
+    transactions: ReadonlyArray<Transaction>,
+    profileNamesByUserId?: Readonly<Record<string, string>>,
+  ) => Promise<ReconcileMembersResult>;
+  refreshGroupMembers: (userId: string, groupId: string) => Promise<GroupRefreshResult>;
   setGroups: (groups: Group[]) => void;
 }
 
@@ -171,6 +189,59 @@ export const useGroupStore = create<GroupStoreState>((set, get) => ({
     });
 
     return mergedGroup;
+  },
+
+  refreshGroupMembers: async (userId, groupId) => {
+    const groups = await getGroupsByUser(userId);
+    const localGroup = groups.find((group) => group.id === groupId);
+
+    if (!localGroup) {
+      set({ groups });
+      return {
+        group: null,
+        cloudSynced: false,
+      };
+    }
+
+    const syncResult = await firebaseService.syncGroup(localGroup);
+    await upsertGroupRecord(syncResult.group);
+
+    const refreshedGroups = await getGroupsByUser(userId);
+    set({ groups: refreshedGroups });
+
+    return {
+      group: syncResult.group,
+      cloudSynced: syncResult.success,
+    };
+  },
+
+  reconcileMembersFromTransactions: async (
+    userId,
+    transactions,
+    profileNamesByUserId = {},
+  ) => {
+    const groups = await getGroupsByUser(userId);
+    const reconciled = reconcileGroupMembersFromTransactions({
+      groups,
+      transactions,
+      profileNamesByUserId,
+    });
+
+    if (reconciled.groupsUpdated > 0) {
+      for (const groupId of reconciled.updatedGroupIds) {
+        const updatedGroup = reconciled.groups.find((group) => group.id === groupId);
+        if (updatedGroup) {
+          await upsertGroupRecord(updatedGroup);
+        }
+      }
+    }
+
+    set({ groups: reconciled.groups });
+
+    return {
+      groupsUpdated: reconciled.groupsUpdated,
+      membersAdded: reconciled.membersAdded,
+    };
   },
 
   setGroups: (groups) => {

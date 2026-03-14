@@ -1,4 +1,10 @@
-import { mergeTransactions, parseSyncPayload } from '../src/services/syncService';
+import {
+  applyTransactionTombstones,
+  createSyncPayload,
+  mergeTransactionTombstones,
+  mergeTransactions,
+  parseSyncPayload,
+} from '../src/services/syncService';
 import type { Transaction } from '../src/types';
 
 const baseTransaction = (overrides: Partial<Transaction>): Transaction => ({
@@ -83,5 +89,141 @@ describe('syncService', () => {
     const parsed = parseSyncPayload(payload);
 
     expect(parsed.transactions[0]?.label).toBe('Miscellaneous');
+    expect(parsed.participantProfiles).toEqual({});
+  });
+
+  test('round-trips participant profiles in sync payload', () => {
+    const transactions: Transaction[] = [
+      baseTransaction({ id: 'tx-1', syncId: 'sync-1', createdAt: 100, updatedAt: 100 }),
+    ];
+
+    const payload = createSyncPayload(
+      transactions,
+      'user-1',
+      0,
+      {
+        'user-1': 'Akira',
+        'user-2': 'Bob',
+      },
+    );
+
+    const parsed = parseSyncPayload(payload);
+    expect(parsed.participantProfiles).toEqual({
+      'user-1': 'Akira',
+      'user-2': 'Bob',
+    });
+  });
+
+  test('round-trips tombstones in sync payload', () => {
+    const transactions: Transaction[] = [
+      baseTransaction({ id: 'tx-1', syncId: 'sync-1', createdAt: 100, updatedAt: 100 }),
+    ];
+
+    const payload = createSyncPayload(
+      transactions,
+      'user-1',
+      0,
+      {},
+      [{
+        syncId: 'sync-deleted',
+        groupId: 'group-1',
+        deletedAt: 500,
+        deletedBy: 'user-1',
+      }],
+    );
+
+    const parsed = parseSyncPayload(payload);
+    expect(parsed.transactionTombstones).toEqual([{
+      syncId: 'sync-deleted',
+      groupId: 'group-1',
+      deletedAt: 500,
+      deletedBy: 'user-1',
+    }]);
+  });
+
+  test('round-trips currency acquisitions in sync payload', () => {
+    const payload = createSyncPayload(
+      [baseTransaction({ id: 'tx-1', syncId: 'sync-1', createdAt: 100, updatedAt: 100 })],
+      'user-1',
+      0,
+      {},
+      [],
+      [{
+        id: 'acq-1',
+        userId: 'user-2',
+        currency: 'JPY',
+        amount: 1000,
+        paidAmount: 10,
+        rate: 100,
+        acquiredAt: 123,
+        note: 'Airport exchange',
+      }],
+    );
+
+    const parsed = parseSyncPayload(payload);
+    expect(parsed.currencyAcquisitions).toEqual([{
+      id: 'acq-1',
+      userId: 'user-2',
+      currency: 'JPY',
+      amount: 1000,
+      paidAmount: 10,
+      rate: 100,
+      acquiredAt: 123,
+      note: 'Airport exchange',
+    }]);
+  });
+
+  test('applies tombstones when deletion is newer than transaction update', () => {
+    const transactions: Transaction[] = [
+      baseTransaction({ id: 'tx-1', syncId: 'sync-1', updatedAt: 100 }),
+      baseTransaction({ id: 'tx-2', syncId: 'sync-2', updatedAt: 300 }),
+    ];
+
+    const filtered = applyTransactionTombstones(transactions, [{
+      syncId: 'sync-1',
+      groupId: 'group-1',
+      deletedAt: 200,
+      deletedBy: 'user-1',
+    }]);
+
+    expect(filtered).toHaveLength(1);
+    expect(filtered[0]?.syncId).toBe('sync-2');
+  });
+
+  test('keeps transaction when tombstone is older than latest update', () => {
+    const transactions: Transaction[] = [
+      baseTransaction({ id: 'tx-2', syncId: 'sync-2', updatedAt: 300 }),
+    ];
+
+    const filtered = applyTransactionTombstones(transactions, [{
+      syncId: 'sync-2',
+      groupId: 'group-1',
+      deletedAt: 200,
+      deletedBy: 'user-1',
+    }]);
+
+    expect(filtered).toHaveLength(1);
+    expect(filtered[0]?.syncId).toBe('sync-2');
+  });
+
+  test('merges tombstones by newest deletedAt per syncId', () => {
+    const merged = mergeTransactionTombstones(
+      [{
+        syncId: 'sync-1',
+        groupId: 'group-1',
+        deletedAt: 100,
+        deletedBy: 'user-1',
+      }],
+      [{
+        syncId: 'sync-1',
+        groupId: 'group-1',
+        deletedAt: 200,
+        deletedBy: 'user-2',
+      }],
+    );
+
+    expect(merged).toHaveLength(1);
+    expect(merged[0]?.deletedAt).toBe(200);
+    expect(merged[0]?.deletedBy).toBe('user-2');
   });
 });

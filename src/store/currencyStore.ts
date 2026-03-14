@@ -3,7 +3,10 @@ import { create } from 'zustand';
 import type { CurrencyAcquisition, CurrencyAcquisitionInput } from '../types';
 import {
   createCurrencyAcquisitionRecord,
+  deleteCurrencyAcquisitionRecord,
+  getAllCurrencyAcquisitions,
   getCurrencyAcquisitionsByUser,
+  replaceCurrencyAcquisitionsForUser,
 } from '../services/database';
 import {
   calculateAcquisitionRate,
@@ -14,17 +17,25 @@ import { generateId } from '../utils';
 
 interface CurrencyStoreState {
   acquisitions: CurrencyAcquisition[];
+  allAcquisitions: CurrencyAcquisition[];
   marketRates: Record<string, number>;
   ratesUpdatedAt: number | null;
   isLoading: boolean;
   loadAcquisitions: (userId: string) => Promise<void>;
   addAcquisition: (userId: string, input: CurrencyAcquisitionInput) => Promise<CurrencyAcquisition>;
+  deleteAcquisition: (userId: string, acquisitionId: string) => Promise<void>;
+  replaceSyncedUserAcquisitions: (
+    currentUserId: string,
+    syncedUserId: string,
+    acquisitions: ReadonlyArray<CurrencyAcquisition>,
+  ) => Promise<void>;
   refreshMarketRates: (baseCurrency: string) => Promise<Record<string, number>>;
   getMarketRate: (baseCurrency: string, foreignCurrency: string) => number | null;
 }
 
 export const useCurrencyStore = create<CurrencyStoreState>((set, get) => ({
   acquisitions: [],
+  allAcquisitions: [],
   marketRates: {},
   ratesUpdatedAt: null,
   isLoading: false,
@@ -33,8 +44,11 @@ export const useCurrencyStore = create<CurrencyStoreState>((set, get) => ({
     set({ isLoading: true });
 
     try {
-      const acquisitions = await getCurrencyAcquisitionsByUser(userId);
-      set({ acquisitions });
+      const [acquisitions, allAcquisitions] = await Promise.all([
+        getCurrencyAcquisitionsByUser(userId),
+        getAllCurrencyAcquisitions(),
+      ]);
+      set({ acquisitions, allAcquisitions });
     } finally {
       set({ isLoading: false });
     }
@@ -58,9 +72,37 @@ export const useCurrencyStore = create<CurrencyStoreState>((set, get) => ({
       acquisitions: [acquisition, ...state.acquisitions].sort(
         (left, right) => right.acquiredAt - left.acquiredAt,
       ),
+      allAcquisitions: [acquisition, ...state.allAcquisitions].sort(
+        (left, right) => right.acquiredAt - left.acquiredAt,
+      ),
     }));
 
     return acquisition;
+  },
+
+  deleteAcquisition: async (userId, acquisitionId) => {
+    const deleted = await deleteCurrencyAcquisitionRecord(acquisitionId, userId);
+    if (!deleted) {
+      throw new Error('You can only delete your own acquisition.');
+    }
+
+    const [acquisitions, allAcquisitions] = await Promise.all([
+      getCurrencyAcquisitionsByUser(userId),
+      getAllCurrencyAcquisitions(),
+    ]);
+    set({ acquisitions, allAcquisitions });
+  },
+
+  replaceSyncedUserAcquisitions: async (currentUserId, syncedUserId, acquisitions) => {
+    await replaceCurrencyAcquisitionsForUser(syncedUserId, acquisitions);
+    const [currentUserAcquisitions, allAcquisitions] = await Promise.all([
+      getCurrencyAcquisitionsByUser(currentUserId),
+      getAllCurrencyAcquisitions(),
+    ]);
+    set({
+      acquisitions: currentUserAcquisitions,
+      allAcquisitions,
+    });
   },
 
   refreshMarketRates: async (baseCurrency) => {
