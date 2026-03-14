@@ -26,6 +26,8 @@ npm run android
 npm run ios
 ```
 
+`npm run android` is configured to use Java 17 and the default macOS SDK path (`$HOME/Library/Android/sdk`) automatically.
+
 ## Build Android debug APK (without emulator)
 
 ```bash
