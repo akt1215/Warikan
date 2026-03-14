@@ -2,9 +2,11 @@ import { create } from 'zustand';
 
 import type { Transaction, TransactionInput } from '../types';
 import {
+  countTransactionsByGroup,
   createTransactionRecord,
   getAllTransactions,
   getTransactionsByGroup,
+  moveTransactionsToGroup as moveTransactionsToGroupInDb,
   replaceAllTransactions,
   upsertTransactionRecord,
 } from '../services/database';
@@ -18,6 +20,8 @@ interface TransactionStoreState {
   addTransaction: (input: TransactionInput) => Promise<Transaction>;
   replaceTransactions: (transactions: Transaction[]) => Promise<void>;
   upsertTransactions: (transactions: Transaction[]) => Promise<void>;
+  countTransactionsInGroup: (groupId: string) => Promise<number>;
+  moveTransactionsToGroup: (sourceGroupId: string, targetGroupId: string) => Promise<void>;
 }
 
 export const useTransactionStore = create<TransactionStoreState>((set) => ({
@@ -73,6 +77,16 @@ export const useTransactionStore = create<TransactionStoreState>((set) => ({
       await upsertTransactionRecord(transaction);
     }
 
+    const updated = await getAllTransactions();
+    set({ transactions: updated });
+  },
+
+  countTransactionsInGroup: async (groupId) => {
+    return countTransactionsByGroup(groupId);
+  },
+
+  moveTransactionsToGroup: async (sourceGroupId, targetGroupId) => {
+    await moveTransactionsToGroupInDb(sourceGroupId, targetGroupId);
     const updated = await getAllTransactions();
     set({ transactions: updated });
   },

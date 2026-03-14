@@ -43,7 +43,7 @@ export const useUserStore = create<UserStoreState>((set, get) => ({
     };
 
     await createLocalUser(user);
-    await createDefaultGroups(user.id);
+    await createDefaultGroups(user.id, user.name);
 
     set({ user, hasHydrated: true });
     return user;

@@ -11,6 +11,7 @@ export interface Split {
 export interface Transaction {
   id: string;
   groupId: string;
+  label: string;
   payerId: string;
   amount: number;
   originalCurrency: CurrencyCode;
@@ -27,6 +28,7 @@ export interface Transaction {
 
 export interface TransactionInput {
   groupId: string;
+  label: string;
   payerId: string;
   amount: number;
   originalCurrency: CurrencyCode;

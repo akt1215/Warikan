@@ -3,22 +3,29 @@ import { StyleSheet, View } from 'react-native';
 
 import type { SplitType } from '../../types';
 import { spacing } from '../../constants';
-import { Button, Input, Picker, type PickerOption } from '../common';
+import { Button, Input, Picker, type PickerOption, Typography } from '../common';
 import { SplitInput, type SplitInputItem } from './SplitInput';
 
 interface TransactionFormProps {
   groupOptions: PickerOption[];
+  labelOptions: PickerOption[];
   currencyOptions: PickerOption[];
   selectedGroupId: string;
+  selectedLabel: string;
   onGroupChange: (value: string) => void;
+  onLabelChange: (value: string) => void;
   amount: string;
   onAmountChange: (value: string) => void;
   currency: string;
   onCurrencyChange: (value: string) => void;
   fee: string;
   onFeeChange: (value: string) => void;
-  owedBy: string;
-  onOwedByChange: (value: string) => void;
+  payerOptions: PickerOption[];
+  selectedPayerId: string;
+  onPayerChange: (payerId: string) => void;
+  debtorOptions: PickerOption[];
+  selectedDebtorIds: string[];
+  onToggleDebtor: (memberId: string) => void;
   note: string;
   onNoteChange: (value: string) => void;
   splitType: SplitType;
@@ -29,17 +36,24 @@ interface TransactionFormProps {
 
 export const TransactionForm = ({
   groupOptions,
+  labelOptions,
   currencyOptions,
   selectedGroupId,
+  selectedLabel,
   onGroupChange,
+  onLabelChange,
   amount,
   onAmountChange,
   currency,
   onCurrencyChange,
   fee,
   onFeeChange,
-  owedBy,
-  onOwedByChange,
+  payerOptions,
+  selectedPayerId,
+  onPayerChange,
+  debtorOptions,
+  selectedDebtorIds,
+  onToggleDebtor,
   note,
   onNoteChange,
   splitType,
@@ -50,10 +64,17 @@ export const TransactionForm = ({
   return (
     <View style={styles.container}>
       <Picker
-        label="Group"
+        label="Travel Group"
         onValueChange={onGroupChange}
         options={groupOptions}
         selectedValue={selectedGroupId}
+      />
+
+      <Picker
+        label="Expense Label"
+        onValueChange={onLabelChange}
+        options={labelOptions}
+        selectedValue={selectedLabel}
       />
 
       <Input
@@ -77,13 +98,39 @@ export const TransactionForm = ({
         value={fee}
       />
 
-      <Input
-        autoCapitalize="none"
-        label="Who owes (comma separated user IDs)"
-        onChangeText={onOwedByChange}
-        placeholder="friend-1,friend-2"
-        value={owedBy}
-      />
+      <View style={styles.debtorsSection}>
+        <Typography variant="bodySmall">Who paid</Typography>
+        <View style={styles.debtorOptions}>
+          {payerOptions.map((option) => (
+            <Button
+              key={option.value}
+              onPress={() => onPayerChange(option.value)}
+              title={option.label}
+              variant={selectedPayerId === option.value ? 'primary' : 'secondary'}
+            />
+          ))}
+        </View>
+      </View>
+
+      <View style={styles.debtorsSection}>
+        <Typography variant="bodySmall">Who owes</Typography>
+        <View style={styles.debtorOptions}>
+          {debtorOptions.length === 0 ? (
+            <Typography variant="caption">
+              No people in this travel group yet. Add members in the Travel tab first.
+            </Typography>
+          ) : (
+            debtorOptions.map((option) => (
+              <Button
+                key={option.value}
+                onPress={() => onToggleDebtor(option.value)}
+                title={option.label}
+                variant={selectedDebtorIds.includes(option.value) ? 'primary' : 'secondary'}
+              />
+            ))
+          )}
+        </View>
+      </View>
 
       <View style={styles.splitTypeRow}>
         <Button
@@ -118,6 +165,14 @@ const styles = StyleSheet.create({
   },
   splitTypeRow: {
     flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  debtorsSection: {
+    gap: spacing.xs,
+  },
+  debtorOptions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: spacing.sm,
   },
 });

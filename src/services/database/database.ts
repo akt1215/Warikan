@@ -1,5 +1,7 @@
 import * as SQLite from 'expo-sqlite';
 
+import { DEFAULT_TRANSACTION_LABEL, LEGACY_LABEL_GROUP_NAMES } from '../../constants';
+
 let databasePromise: Promise<SQLite.SQLiteDatabase> | null = null;
 
 const SCHEMA_SQL = `
@@ -27,6 +29,7 @@ CREATE TABLE IF NOT EXISTS groups (
 CREATE TABLE IF NOT EXISTS transactions (
   id TEXT PRIMARY KEY NOT NULL,
   groupId TEXT NOT NULL,
+  label TEXT NOT NULL DEFAULT '${DEFAULT_TRANSACTION_LABEL}',
   payerId TEXT NOT NULL,
   amount REAL NOT NULL,
   originalCurrency TEXT NOT NULL,
@@ -64,6 +67,54 @@ CREATE INDEX IF NOT EXISTS idx_transactions_syncId ON transactions(syncId);
 CREATE INDEX IF NOT EXISTS idx_currency_acquisitions_user_currency ON currency_acquisitions(userId, currency);
 `;
 
+interface TableInfoRow {
+  name: string;
+}
+
+const ensureTransactionLabelColumn = async (
+  database: SQLite.SQLiteDatabase,
+): Promise<void> => {
+  const columns = await database.getAllAsync<TableInfoRow>('PRAGMA table_info(transactions)');
+  if (columns.some((column) => column.name === 'label')) {
+    return;
+  }
+
+  await database.runAsync(
+    `ALTER TABLE transactions ADD COLUMN label TEXT NOT NULL DEFAULT '${DEFAULT_TRANSACTION_LABEL}'`,
+  );
+};
+
+const backfillLegacyTransactionLabels = async (
+  database: SQLite.SQLiteDatabase,
+): Promise<void> => {
+  const quotedLegacyNames = LEGACY_LABEL_GROUP_NAMES.map((name) => `'${name.replace(/'/g, "''")}'`).join(
+    ', ',
+  );
+
+  if (!quotedLegacyNames) {
+    return;
+  }
+
+  await database.runAsync(
+    `UPDATE transactions
+     SET label = (
+       SELECT groups.name
+       FROM groups
+       WHERE groups.id = transactions.groupId
+     )
+     WHERE label = $defaultLabel
+       AND EXISTS (
+         SELECT 1
+         FROM groups
+         WHERE groups.id = transactions.groupId
+           AND groups.name IN (${quotedLegacyNames})
+       )`,
+    {
+      $defaultLabel: DEFAULT_TRANSACTION_LABEL,
+    },
+  );
+};
+
 export const getDatabase = async (): Promise<SQLite.SQLiteDatabase> => {
   if (!databasePromise) {
     databasePromise = SQLite.openDatabaseAsync('warikan.db');
@@ -75,4 +126,6 @@ export const getDatabase = async (): Promise<SQLite.SQLiteDatabase> => {
 export const initializeDatabase = async (): Promise<void> => {
   const database = await getDatabase();
   await database.execAsync(SCHEMA_SQL);
+  await ensureTransactionLabelColumn(database);
+  await backfillLegacyTransactionLabels(database);
 };

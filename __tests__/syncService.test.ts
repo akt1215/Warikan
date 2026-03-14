@@ -1,9 +1,10 @@
-import { mergeTransactions } from '../src/services/syncService';
+import { mergeTransactions, parseSyncPayload } from '../src/services/syncService';
 import type { Transaction } from '../src/types';
 
 const baseTransaction = (overrides: Partial<Transaction>): Transaction => ({
   id: 'id-default',
   groupId: 'group-1',
+  label: 'Dinner',
   payerId: 'payer-1',
   amount: 100,
   originalCurrency: 'USD',
@@ -52,5 +53,35 @@ describe('syncService', () => {
     expect(merged.updated).toBe(1);
     expect(merged.merged).toHaveLength(1);
     expect(merged.merged[0]?.note).toBe('New');
+  });
+
+  test('defaults label when parsing legacy payload without label field', () => {
+    const payload = JSON.stringify({
+      version: 1,
+      generatedAt: 200,
+      generatedBy: 'user-1',
+      transactions: [
+        {
+          id: 'legacy-1',
+          groupId: 'group-1',
+          payerId: 'payer-1',
+          amount: 100,
+          originalCurrency: 'USD',
+          fee: 0,
+          convertedAmount: 100,
+          note: 'Legacy',
+          splitType: 'equal',
+          splits: [{ userId: 'user-2', amount: 50, isPaid: false }],
+          createdBy: 'payer-1',
+          createdAt: 100,
+          updatedAt: 100,
+          syncId: 'legacy-sync-1',
+        },
+      ],
+    });
+
+    const parsed = parseSyncPayload(payload);
+
+    expect(parsed.transactions[0]?.label).toBe('Miscellaneous');
   });
 });

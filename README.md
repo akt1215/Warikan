@@ -28,6 +28,22 @@ npm run ios
 
 `npm run android` is configured to use Java 17 and the default macOS SDK path (`$HOME/Library/Android/sdk`) automatically.
 
+## Travel groups, labels, and invites
+
+- Create travel groups in the **Travel** tab.
+- Member names come from each user's profile when they join the group.
+- Expense labels are separate (`Dinner`, `Trip`, `Household`, `Miscellaneous`) and selected in **Add Transaction**.
+- In **Add Transaction**, choose who owes from selectable member chips (no manual ID typing).
+- In **Travel**, generate:
+  - an actual invite QR code, and
+  - a simple passphrase code.
+- Scan the QR code (or paste payload/passphrase) in **Join Group**.
+
+## QR sync
+
+- Generate a QR code from **QR Sync** on one device.
+- Scan it on another device using the in-app camera scanner and tap **Merge Payload**.
+
 ## Build Android debug APK (without emulator)
 
 ```bash

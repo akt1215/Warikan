@@ -31,7 +31,11 @@ export const MainTabNavigator = (): React.JSX.Element => {
       }}
     >
       <Tab.Screen component={HomeScreen} name="Home" />
-      <Tab.Screen component={GroupsScreen} name="Groups" />
+      <Tab.Screen
+        component={GroupsScreen}
+        name="Groups"
+        options={{ title: 'Travel Groups', tabBarLabel: 'Travel' }}
+      />
       <Tab.Screen
         component={AddTransactionNavigator}
         name="AddTransaction"

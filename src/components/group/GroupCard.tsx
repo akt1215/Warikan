@@ -11,13 +11,19 @@ interface GroupCardProps {
 }
 
 export const GroupCard = ({ group, onPress }: GroupCardProps): React.JSX.Element => {
+  const memberPreview = group.members
+    .slice(0, 3)
+    .map((member) => member.name)
+    .join(', ');
+
   const content = (
     <Card>
       <View style={styles.row}>
         <Text style={styles.name}>{group.name}</Text>
         {group.isDefault ? <Text style={styles.badge}>Default</Text> : null}
       </View>
-      <Text style={styles.meta}>Members: {group.memberIds.length}</Text>
+      <Text style={styles.meta}>Members: {group.members.length}</Text>
+      {memberPreview ? <Text style={styles.meta}>People: {memberPreview}</Text> : null}
     </Card>
   );
 

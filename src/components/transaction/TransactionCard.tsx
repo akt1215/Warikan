@@ -24,6 +24,7 @@ export const TransactionCard = ({
       <Text style={styles.meta}>
         Original: {formatCurrency(transaction.amount + transaction.fee, transaction.originalCurrency)}
       </Text>
+      <Text style={styles.meta}>Label: {transaction.label}</Text>
       <Text style={styles.meta}>Payer: {transaction.payerId}</Text>
       <Text style={styles.meta}>{formatTimestamp(transaction.createdAt, 'PP p')}</Text>
     </Card>

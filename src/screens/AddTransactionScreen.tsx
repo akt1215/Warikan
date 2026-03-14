@@ -3,7 +3,14 @@ import { Alert, ScrollView, StyleSheet } from 'react-native';
 
 import { Button, Typography } from '../components/common';
 import { TransactionForm, type SplitInputItem } from '../components/transaction';
-import { CURRENCY_LABELS, colors, spacing, SUPPORTED_CURRENCIES } from '../constants';
+import {
+  CURRENCY_LABELS,
+  colors,
+  DEFAULT_TRANSACTION_LABEL,
+  spacing,
+  SUPPORTED_CURRENCIES,
+  TRANSACTION_LABELS,
+} from '../constants';
 import { convertToBaseCurrency } from '../services';
 import type { SplitType } from '../types';
 import {
@@ -12,16 +19,7 @@ import {
   useTransactionStore,
   useUserStore,
 } from '../store';
-
-const parseDebtors = (raw: string, payerId: string): string[] => {
-  const values = raw
-    .split(',')
-    .map((entry) => entry.trim())
-    .filter((entry) => entry.length > 0)
-    .filter((entry) => entry !== payerId);
-
-  return Array.from(new Set(values));
-};
+import { isTravelGroup } from '../utils';
 
 const toNumber = (value: string): number => {
   const parsed = Number(value);
@@ -40,10 +38,12 @@ export const AddTransactionScreen = (): React.JSX.Element => {
   const getMarketRate = useCurrencyStore((state) => state.getMarketRate);
 
   const [selectedGroupId, setSelectedGroupId] = useState('');
+  const [selectedLabel, setSelectedLabel] = useState<string>(DEFAULT_TRANSACTION_LABEL);
   const [amount, setAmount] = useState('');
   const [currency, setCurrency] = useState<string>(user?.baseCurrency ?? 'USD');
   const [fee, setFee] = useState('0');
-  const [owedBy, setOwedBy] = useState('');
+  const [selectedPayerId, setSelectedPayerId] = useState('');
+  const [selectedDebtorIds, setSelectedDebtorIds] = useState<string[]>([]);
   const [note, setNote] = useState('');
   const [splitType, setSplitType] = useState<SplitType>('equal');
   const [customSplitValues, setCustomSplitValues] = useState<SplitInputItem[]>([]);
@@ -58,29 +58,22 @@ export const AddTransactionScreen = (): React.JSX.Element => {
     void refreshMarketRates(user.baseCurrency);
   }, [loadAcquisitions, loadGroups, refreshMarketRates, user]);
 
-  useEffect(() => {
-    const firstGroup = groups[0];
-    if (!selectedGroupId && firstGroup) {
-      setSelectedGroupId(firstGroup.id);
-    }
-  }, [groups, selectedGroupId]);
+  const travelGroups = useMemo(() => {
+    return groups.filter(isTravelGroup);
+  }, [groups]);
 
   useEffect(() => {
-    if (!user || splitType !== 'custom') {
+    if (travelGroups.length === 0) {
+      if (selectedGroupId) {
+        setSelectedGroupId('');
+      }
       return;
     }
 
-    const debtors = parseDebtors(owedBy, user.id);
-    setCustomSplitValues((previous) => {
-      return debtors.map((debtor) => {
-        const existing = previous.find((item) => item.userId === debtor);
-        return {
-          userId: debtor,
-          amount: existing?.amount ?? 0,
-        };
-      });
-    });
-  }, [owedBy, splitType, user]);
+    if (!travelGroups.some((group) => group.id === selectedGroupId)) {
+      setSelectedGroupId(travelGroups[0]?.id ?? '');
+    }
+  }, [selectedGroupId, travelGroups]);
 
   const currencyOptions = useMemo(() => {
     const fromSupported = SUPPORTED_CURRENCIES.map((entry) => ({
@@ -97,12 +90,119 @@ export const AddTransactionScreen = (): React.JSX.Element => {
     return [...fromSupported, ...fromAcquisitions];
   }, [acquisitions]);
 
+  const labelOptions = useMemo(() => {
+    return TRANSACTION_LABELS.map((entry) => ({
+      label: entry,
+      value: entry,
+    }));
+  }, []);
+
   const groupOptions = useMemo(() => {
-    return groups.map((group) => ({
+    return travelGroups.map((group) => ({
       label: group.name,
       value: group.id,
     }));
-  }, [groups]);
+  }, [travelGroups]);
+
+  const selectedGroup = useMemo(() => {
+    return travelGroups.find((group) => group.id === selectedGroupId) ?? null;
+  }, [selectedGroupId, travelGroups]);
+
+  const payerOptions = useMemo(() => {
+    if (!selectedGroup) {
+      return [];
+    }
+
+    return selectedGroup.members.map((member) => ({
+      label: member.name,
+      value: member.id,
+    }));
+  }, [selectedGroup]);
+
+  const debtorOptions = useMemo(() => {
+    if (!selectedGroup) {
+      return [];
+    }
+
+    return selectedGroup.members
+      .filter((member) => member.id !== selectedPayerId)
+      .map((member) => ({
+        label: member.name,
+        value: member.id,
+      }));
+  }, [selectedGroup, selectedPayerId]);
+
+  const debtorLabelById = useMemo(() => {
+    return Object.fromEntries(
+      debtorOptions.map((option) => [option.value, option.label]),
+    ) as Record<string, string>;
+  }, [debtorOptions]);
+
+  useEffect(() => {
+    if (!selectedGroup) {
+      setSelectedPayerId('');
+      return;
+    }
+
+    const groupMemberIds = selectedGroup.members.map((member) => member.id);
+    if (groupMemberIds.includes(selectedPayerId)) {
+      return;
+    }
+
+    const defaultPayerId =
+      user && groupMemberIds.includes(user.id)
+        ? user.id
+        : selectedGroup.members[0]?.id ?? '';
+
+    setSelectedPayerId(defaultPayerId);
+  }, [selectedGroup, selectedPayerId, user]);
+
+  useEffect(() => {
+    const validIds = new Set(debtorOptions.map((option) => option.value));
+    const allDebtors = debtorOptions.map((option) => option.value);
+    setSelectedDebtorIds((previous) => {
+      const filtered = previous.filter((id) => validIds.has(id));
+
+      if (filtered.length === 0) {
+        return allDebtors;
+      }
+
+      if (
+        filtered.length === previous.length &&
+        filtered.every((id, index) => id === previous[index])
+      ) {
+        return previous;
+      }
+
+      return filtered;
+    });
+  }, [debtorOptions]);
+
+  useEffect(() => {
+    setCustomSplitValues((previous) =>
+      previous.map((item) => ({
+        ...item,
+        label: debtorLabelById[item.userId] ?? item.label,
+      })),
+    );
+  }, [debtorLabelById]);
+
+  useEffect(() => {
+    if (splitType !== 'custom') {
+      return;
+    }
+
+    setCustomSplitValues((previous) => {
+      return selectedDebtorIds.map((debtor) => {
+        const existing = previous.find((item) => item.userId === debtor);
+        return {
+          userId: debtor,
+          label: existing?.label ?? debtorLabelById[debtor] ?? debtor,
+          amount: existing?.amount ?? 0,
+        };
+      });
+    });
+  }, [debtorLabelById, selectedDebtorIds, splitType]);
 
   const updateCustomSplit = (userId: string, splitAmount: number): void => {
     setCustomSplitValues((previous) =>
@@ -112,10 +212,54 @@ export const AddTransactionScreen = (): React.JSX.Element => {
     );
   };
 
+  const toggleDebtor = (debtorId: string): void => {
+    setSelectedDebtorIds((previous) => {
+      if (previous.includes(debtorId)) {
+        return previous.filter((entry) => entry !== debtorId);
+      }
+
+      return [...previous, debtorId];
+    });
+  };
+
+  const handlePayerChange = (payerId: string): void => {
+    setSelectedPayerId(payerId);
+    setSelectedDebtorIds((previous) => {
+      const filtered = previous.filter((id) => id !== payerId);
+      if (filtered.length > 0) {
+        return filtered;
+      }
+
+      return debtorOptions
+        .filter((option) => option.value !== payerId)
+        .map((option) => option.value);
+    });
+    setCustomSplitValues([]);
+  };
+
+  const handleGroupChange = (groupId: string): void => {
+    setSelectedGroupId(groupId);
+    const nextGroup = travelGroups.find((group) => group.id === groupId);
+    const defaultPayer =
+      nextGroup && user && nextGroup.members.some((member) => member.id === user.id)
+        ? user.id
+        : nextGroup?.members[0]?.id ?? '';
+
+    const defaultDebtors = nextGroup
+      ? nextGroup.members
+          .filter((member) => member.id !== defaultPayer)
+          .map((member) => member.id)
+      : [];
+
+    setSelectedPayerId(defaultPayer);
+    setSelectedDebtorIds(defaultDebtors);
+    setCustomSplitValues([]);
+  };
+
   const resetForm = (): void => {
     setAmount('');
     setFee('0');
-    setOwedBy('');
+    setSelectedDebtorIds([]);
     setNote('');
     setSplitType('equal');
     setCustomSplitValues([]);
@@ -130,7 +274,7 @@ export const AddTransactionScreen = (): React.JSX.Element => {
     const parsedFee = toNumber(fee);
 
     if (!selectedGroupId) {
-      Alert.alert('Group required', 'Select a group before saving.');
+      Alert.alert('Travel group required', 'Select a travel group before saving.');
       return;
     }
 
@@ -139,7 +283,17 @@ export const AddTransactionScreen = (): React.JSX.Element => {
       return;
     }
 
-    const debtors = parseDebtors(owedBy, user.id);
+    if (
+      !selectedPayerId ||
+      !selectedGroup?.members.some((member) => member.id === selectedPayerId)
+    ) {
+      Alert.alert('Payer required', 'Select a valid payer from this group.');
+      return;
+    }
+
+    const debtors = Array.from(new Set(selectedDebtorIds)).filter(
+      (debtorId) => debtorId !== selectedPayerId,
+    );
     if (debtors.length === 0) {
       Alert.alert('Missing debtors', 'Add at least one person who owes.');
       return;
@@ -177,7 +331,8 @@ export const AddTransactionScreen = (): React.JSX.Element => {
 
       await addTransaction({
         groupId: selectedGroupId,
-        payerId: user.id,
+        label: selectedLabel,
+        payerId: selectedPayerId,
         amount: parsedAmount,
         originalCurrency: currency,
         fee: parsedFee,
@@ -210,17 +365,24 @@ export const AddTransactionScreen = (): React.JSX.Element => {
         customSplitValues={customSplitValues}
         fee={fee}
         groupOptions={groupOptions}
+        labelOptions={labelOptions}
         note={note}
         onAmountChange={setAmount}
         onCurrencyChange={setCurrency}
         onCustomSplitChange={updateCustomSplit}
+        onPayerChange={handlePayerChange}
+        onToggleDebtor={toggleDebtor}
         onFeeChange={setFee}
-        onGroupChange={setSelectedGroupId}
+        onGroupChange={handleGroupChange}
+        onLabelChange={setSelectedLabel}
         onNoteChange={setNote}
-        onOwedByChange={setOwedBy}
         onSplitTypeChange={setSplitType}
-        owedBy={owedBy}
+        debtorOptions={debtorOptions}
+        payerOptions={payerOptions}
         selectedGroupId={selectedGroupId}
+        selectedLabel={selectedLabel}
+        selectedDebtorIds={selectedDebtorIds}
+        selectedPayerId={selectedPayerId}
         splitType={splitType}
       />
       <Button onPress={() => void handleSave()} title="Save Transaction" />

@@ -61,10 +61,13 @@ export const QRSyncScreen = (): React.JSX.Element => {
       <QRGenerator payload={generatedPayload} />
 
       <QRScanner
+        inputLabel="Scanned or pasted sync payload"
         onChange={setIncomingPayload}
-        onMerge={() => {
+        onSubmit={() => {
           void handleMerge();
         }}
+        scanTitle="Scan Sync QR"
+        submitLabel="Merge Payload"
         value={incomingPayload}
       />
 

@@ -6,6 +6,7 @@ import { Input } from '../common';
 
 export interface SplitInputItem {
   userId: string;
+  label: string;
   amount: number;
 }
 
@@ -24,7 +25,7 @@ export const SplitInput = ({
         <Input
           key={item.userId}
           keyboardType="decimal-pad"
-          label={`Amount for ${item.userId}`}
+          label={`Amount for ${item.label}`}
           onChangeText={(text) => onAmountChange(item.userId, Number(text) || 0)}
           value={item.amount ? String(item.amount) : ''}
         />

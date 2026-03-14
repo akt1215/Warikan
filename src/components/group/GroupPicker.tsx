@@ -15,7 +15,7 @@ export const GroupPicker = ({
 }: GroupPickerProps): React.JSX.Element => {
   return (
     <Picker
-      label="Select Group"
+      label="Select Travel Group"
       onValueChange={onSelectGroup}
       options={groups}
       selectedValue={selectedGroupId}

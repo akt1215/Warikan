@@ -1,4 +1,5 @@
 import type { SyncMergeResult, SyncPayload, Transaction } from '../types';
+import { DEFAULT_TRANSACTION_LABEL } from '../constants';
 
 const normalizeBySyncId = (transactions: ReadonlyArray<Transaction>): Transaction[] => {
   const map = new Map<string, Transaction>();
@@ -19,6 +20,27 @@ const isRecord = (value: unknown): value is Record<string, unknown> => {
   return typeof value === 'object' && value !== null;
 };
 
+const applyDefaultTransactionLabel = (value: unknown): unknown => {
+  if (!Array.isArray(value)) {
+    return value;
+  }
+
+  return value.map((item) => {
+    if (!isRecord(item)) {
+      return item;
+    }
+
+    if (typeof item.label === 'string' && item.label.trim()) {
+      return item;
+    }
+
+    return {
+      ...item,
+      label: DEFAULT_TRANSACTION_LABEL,
+    };
+  });
+};
+
 const isValidTransactionArray = (value: unknown): value is Transaction[] => {
   if (!Array.isArray(value)) {
     return false;
@@ -32,6 +54,7 @@ const isValidTransactionArray = (value: unknown): value is Transaction[] => {
     return (
       typeof item.id === 'string' &&
       typeof item.groupId === 'string' &&
+      typeof item.label === 'string' &&
       typeof item.payerId === 'string' &&
       typeof item.amount === 'number' &&
       typeof item.originalCurrency === 'string' &&
@@ -82,7 +105,9 @@ export const parseSyncPayload = (rawPayload: string): SyncPayload => {
     throw new Error('Invalid payload metadata.');
   }
 
-  if (!isValidTransactionArray(parsed.transactions)) {
+  const normalizedTransactions = applyDefaultTransactionLabel(parsed.transactions);
+
+  if (!isValidTransactionArray(normalizedTransactions)) {
     throw new Error('Invalid transaction data in payload.');
   }
 
@@ -90,7 +115,7 @@ export const parseSyncPayload = (rawPayload: string): SyncPayload => {
     version: 1,
     generatedAt: parsed.generatedAt,
     generatedBy: parsed.generatedBy,
-    transactions: normalizeBySyncId(parsed.transactions),
+    transactions: normalizeBySyncId(normalizedTransactions),
   };
 };
 

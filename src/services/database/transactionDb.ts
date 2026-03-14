@@ -1,11 +1,13 @@
 import type * as SQLite from 'expo-sqlite';
 
+import { DEFAULT_TRANSACTION_LABEL } from '../../constants';
 import type { Transaction } from '../../types';
 import { getDatabase } from './database';
 
 interface TransactionRow {
   id: string;
   groupId: string;
+  label: string;
   payerId: string;
   amount: number;
   originalCurrency: string;
@@ -46,6 +48,7 @@ const parseSplits = (raw: string): Transaction['splits'] => {
 const toTransaction = (row: TransactionRow): Transaction => ({
   id: row.id,
   groupId: row.groupId,
+  label: row.label.trim() || DEFAULT_TRANSACTION_LABEL,
   payerId: row.payerId,
   amount: row.amount,
   originalCurrency: row.originalCurrency,
@@ -68,6 +71,7 @@ const runInsert = async (
     `INSERT INTO transactions (
       id,
       groupId,
+      label,
       payerId,
       amount,
       originalCurrency,
@@ -83,6 +87,7 @@ const runInsert = async (
     ) VALUES (
       $id,
       $groupId,
+      $label,
       $payerId,
       $amount,
       $originalCurrency,
@@ -99,6 +104,7 @@ const runInsert = async (
     {
       $id: transaction.id,
       $groupId: transaction.groupId,
+      $label: transaction.label,
       $payerId: transaction.payerId,
       $amount: transaction.amount,
       $originalCurrency: transaction.originalCurrency,
@@ -126,6 +132,7 @@ export const upsertTransactionRecord = async (transaction: Transaction): Promise
     `INSERT INTO transactions (
       id,
       groupId,
+      label,
       payerId,
       amount,
       originalCurrency,
@@ -141,6 +148,7 @@ export const upsertTransactionRecord = async (transaction: Transaction): Promise
     ) VALUES (
       $id,
       $groupId,
+      $label,
       $payerId,
       $amount,
       $originalCurrency,
@@ -156,6 +164,7 @@ export const upsertTransactionRecord = async (transaction: Transaction): Promise
     )
     ON CONFLICT(id) DO UPDATE SET
       groupId = excluded.groupId,
+      label = excluded.label,
       payerId = excluded.payerId,
       amount = excluded.amount,
       originalCurrency = excluded.originalCurrency,
@@ -171,6 +180,7 @@ export const upsertTransactionRecord = async (transaction: Transaction): Promise
     {
       $id: transaction.id,
       $groupId: transaction.groupId,
+      $label: transaction.label,
       $payerId: transaction.payerId,
       $amount: transaction.amount,
       $originalCurrency: transaction.originalCurrency,
@@ -191,7 +201,7 @@ export const getAllTransactions = async (): Promise<Transaction[]> => {
   const database = await getDatabase();
   const rows = await database.getAllAsync<TransactionRow>(
     `SELECT id, groupId, payerId, amount, originalCurrency, fee, convertedAmount, note,
-            splitType, splits, createdBy, createdAt, updatedAt, syncId
+            label, splitType, splits, createdBy, createdAt, updatedAt, syncId
      FROM transactions
      ORDER BY createdAt DESC`,
   );
@@ -203,7 +213,7 @@ export const getTransactionsByGroup = async (groupId: string): Promise<Transacti
   const database = await getDatabase();
   const rows = await database.getAllAsync<TransactionRow>(
     `SELECT id, groupId, payerId, amount, originalCurrency, fee, convertedAmount, note,
-            splitType, splits, createdBy, createdAt, updatedAt, syncId
+            label, splitType, splits, createdBy, createdAt, updatedAt, syncId
      FROM transactions
      WHERE groupId = $groupId
      ORDER BY createdAt DESC`,
@@ -217,7 +227,7 @@ export const getTransactionsSince = async (timestamp: number): Promise<Transacti
   const database = await getDatabase();
   const rows = await database.getAllAsync<TransactionRow>(
     `SELECT id, groupId, payerId, amount, originalCurrency, fee, convertedAmount, note,
-            splitType, splits, createdBy, createdAt, updatedAt, syncId
+            label, splitType, splits, createdBy, createdAt, updatedAt, syncId
      FROM transactions
      WHERE updatedAt > $timestamp
      ORDER BY createdAt DESC`,
@@ -237,4 +247,36 @@ export const replaceAllTransactions = async (transactions: Transaction[]): Promi
       await runInsert(database, transaction);
     }
   });
+};
+
+export const countTransactionsByGroup = async (groupId: string): Promise<number> => {
+  const database = await getDatabase();
+  const row = await database.getFirstAsync<{ count: number }>(
+    `SELECT COUNT(*) as count
+     FROM transactions
+     WHERE groupId = $groupId`,
+    { $groupId: groupId },
+  );
+
+  return row?.count ?? 0;
+};
+
+export const moveTransactionsToGroup = async (
+  sourceGroupId: string,
+  targetGroupId: string,
+): Promise<void> => {
+  const database = await getDatabase();
+  const timestamp = Date.now();
+
+  await database.runAsync(
+    `UPDATE transactions
+     SET groupId = $targetGroupId,
+         updatedAt = $updatedAt
+     WHERE groupId = $sourceGroupId`,
+    {
+      $targetGroupId: targetGroupId,
+      $updatedAt: timestamp,
+      $sourceGroupId: sourceGroupId,
+    },
+  );
 };
