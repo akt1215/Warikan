@@ -22,8 +22,11 @@ npm install
 # Android (debug/dev-client build)
 npm run android
 
-# iOS
+# iOS (debug/dev-client build)
 npm run ios
+
+# iOS release install (bundled JS, no Metro required after install)
+npm run ios:release
 ```
 
 `npm run android` installs a debug build and expects Metro to be running.
@@ -52,6 +55,18 @@ it means you launched a debug build without Metro reachable. Fix by either:
    - `npx expo start --dev-client --lan`
 2. Installing release build:
    - `npm run android:release`
+
+### iOS debug vs release behavior
+
+- **Debug (`npm run ios`)**: requires Metro (`expo start`) and connectivity while loading JS.
+- **Release (`npm run ios:release`)**: includes bundled JS and works without Metro after installation.
+
+If you see an iOS equivalent script-loading error (for example `No bundle URL present`), you launched a debug build without Metro reachable. Fix by either:
+
+1. Running Metro for debug:
+   - `npx expo start --dev-client --lan`
+2. Installing release build:
+   - `npm run ios:release`
 
 ## Travel groups, labels, and invites
 
