@@ -40,6 +40,11 @@ npm run android:release
 
 `npm run android` / `npm run android:release` are configured to use Java 17 and the default macOS SDK path (`$HOME/Library/Android/sdk`) automatically.
 
+This app uses `@expo/vector-icons` for tab icons, so `expo-font` must be installed (managed automatically via `npx expo install expo-font`).
+
+If Android tab icons are missing while labels are visible, reinstall the app after a rebuild (`npm run android:release`). This ensures the latest icon-font changes are applied.
+Warikan now uses platform-specific tab icons: iOS uses Ionicons, while Android uses native symbol glyphs to avoid Android font-icon rendering issues.
+
 ### Android debug vs release behavior
 
 - **Debug (`npm run android`)**: requires Metro (`expo start`) and connectivity (USB reverse or same-network LAN).

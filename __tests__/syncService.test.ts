@@ -5,7 +5,7 @@ import {
   mergeTransactions,
   parseSyncPayload,
 } from '../src/services/syncService';
-import type { Transaction } from '../src/types';
+import type { Group, Transaction } from '../src/types';
 
 const baseTransaction = (overrides: Partial<Transaction>): Transaction => ({
   id: 'id-default',
@@ -23,6 +23,20 @@ const baseTransaction = (overrides: Partial<Transaction>): Transaction => ({
   createdAt: 100,
   updatedAt: 100,
   syncId: 'sync-default',
+  ...overrides,
+});
+
+const baseGroup = (overrides: Partial<Group>): Group => ({
+  id: 'group-1',
+  name: 'Trip Group',
+  isDefault: true,
+  createdBy: 'payer-1',
+  members: [
+    { id: 'payer-1', name: 'Akira', joinedAt: 100 },
+    { id: 'user-2', name: 'Bob', joinedAt: 101 },
+  ],
+  createdAt: 100,
+  updatedAt: 100,
   ...overrides,
 });
 
@@ -171,6 +185,26 @@ describe('syncService', () => {
       acquiredAt: 123,
       note: 'Airport exchange',
     }]);
+  });
+
+  test('round-trips groups in sync payload', () => {
+    const groups: Group[] = [
+      baseGroup({ id: 'group-1', name: 'Japan Trip', isDefault: false, updatedAt: 200 }),
+      baseGroup({ id: 'group-2', name: 'Korea Trip', isDefault: true, createdAt: 110, updatedAt: 210 }),
+    ];
+
+    const payload = createSyncPayload(
+      [baseTransaction({ id: 'tx-1', syncId: 'sync-1', createdAt: 100, updatedAt: 100 })],
+      'user-1',
+      0,
+      {},
+      [],
+      [],
+      groups,
+    );
+
+    const parsed = parseSyncPayload(payload);
+    expect(parsed.groups).toEqual(groups);
   });
 
   test('applies tombstones when deletion is newer than transaction update', () => {

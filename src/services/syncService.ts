@@ -1,11 +1,13 @@
 import type {
   CurrencyAcquisition,
+  Group,
   SyncMergeResult,
   SyncPayload,
   Transaction,
   TransactionTombstone,
 } from '../types';
 import { DEFAULT_TRANSACTION_LABEL } from '../constants';
+import { mergeGroupMembers } from './groupInviteService';
 
 const normalizeBySyncId = (transactions: ReadonlyArray<Transaction>): Transaction[] => {
   const map = new Map<string, Transaction>();
@@ -142,6 +144,103 @@ const normalizeCurrencyAcquisitions = (
   return acquisitions.sort((left, right) => right.acquiredAt - left.acquiredAt);
 };
 
+const normalizeGroupMembers = (
+  value: unknown,
+  fallbackJoinedAt: number,
+): Group['members'] => {
+  if (!Array.isArray(value)) {
+    throw new Error('Invalid group data in payload.');
+  }
+
+  const members: Group['members'] = [];
+  for (const entry of value) {
+    if (typeof entry === 'string') {
+      const normalizedId = entry.trim();
+      if (!normalizedId) {
+        continue;
+      }
+
+      members.push({
+        id: normalizedId,
+        name: normalizedId,
+        joinedAt: fallbackJoinedAt,
+      });
+      continue;
+    }
+
+    if (!isRecord(entry) || typeof entry.id !== 'string' || typeof entry.name !== 'string') {
+      throw new Error('Invalid group data in payload.');
+    }
+
+    const memberId = entry.id.trim();
+    const memberName = entry.name.trim();
+    if (!memberId || !memberName) {
+      continue;
+    }
+
+    members.push({
+      id: memberId,
+      name: memberName,
+      joinedAt: typeof entry.joinedAt === 'number' ? entry.joinedAt : fallbackJoinedAt,
+    });
+  }
+
+  return mergeGroupMembers(members);
+};
+
+const normalizeGroups = (value: unknown): Group[] => {
+  if (value === undefined) {
+    return [];
+  }
+
+  if (!Array.isArray(value)) {
+    throw new Error('Invalid group data in payload.');
+  }
+
+  const groupsById = new Map<string, Group>();
+  for (const entry of value) {
+    if (
+      !isRecord(entry) ||
+      typeof entry.id !== 'string' ||
+      typeof entry.name !== 'string' ||
+      typeof entry.isDefault !== 'boolean' ||
+      typeof entry.createdBy !== 'string' ||
+      typeof entry.createdAt !== 'number' ||
+      typeof entry.updatedAt !== 'number'
+    ) {
+      throw new Error('Invalid group data in payload.');
+    }
+
+    const id = entry.id.trim();
+    const name = entry.name.trim();
+    const createdBy = entry.createdBy.trim();
+    if (!id || !name || !createdBy) {
+      continue;
+    }
+
+    const members = normalizeGroupMembers(
+      Array.isArray(entry.members) ? entry.members : entry.memberIds,
+      entry.createdAt,
+    );
+    const normalized: Group = {
+      id,
+      name,
+      isDefault: entry.isDefault,
+      createdBy,
+      members,
+      createdAt: entry.createdAt,
+      updatedAt: entry.updatedAt,
+    };
+
+    const existing = groupsById.get(id);
+    if (!existing || normalized.updatedAt > existing.updatedAt) {
+      groupsById.set(id, normalized);
+    }
+  }
+
+  return Array.from(groupsById.values()).sort((left, right) => left.createdAt - right.createdAt);
+};
+
 const applyDefaultTransactionLabel = (value: unknown): unknown => {
   if (!Array.isArray(value)) {
     return value;
@@ -200,6 +299,7 @@ export const createSyncPayload = (
   participantProfiles: Readonly<Record<string, string>> = {},
   transactionTombstones: ReadonlyArray<TransactionTombstone> = [],
   currencyAcquisitions: ReadonlyArray<CurrencyAcquisition> = [],
+  groups: ReadonlyArray<Group> = [],
 ): string => {
   const incremental = transactions.filter(
     (transaction) => transaction.updatedAt > sinceTimestamp,
@@ -216,6 +316,7 @@ export const createSyncPayload = (
     currencyAcquisitions: normalizeCurrencyAcquisitions(currencyAcquisitions),
     participantProfiles: normalizeParticipantProfiles(participantProfiles),
     transactionTombstones: mergeTransactionTombstones([], tombstones),
+    groups: normalizeGroups(groups),
   };
 
   return JSON.stringify(payload);
@@ -250,6 +351,7 @@ export const parseSyncPayload = (rawPayload: string): SyncPayload => {
     currencyAcquisitions: normalizeCurrencyAcquisitions(parsed.currencyAcquisitions),
     participantProfiles: normalizeParticipantProfiles(parsed.participantProfiles),
     transactionTombstones: normalizeTransactionTombstones(parsed.transactionTombstones),
+    groups: normalizeGroups(parsed.groups),
   };
 };
 

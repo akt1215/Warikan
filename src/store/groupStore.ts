@@ -15,7 +15,7 @@ import {
   parseGroupInviteInput,
   reconcileGroupMembersFromTransactions,
 } from '../services';
-import { generateId } from '../utils';
+import { generateId, isTravelGroup } from '../utils';
 
 interface GroupInviteBundle {
   payload: string;
@@ -37,6 +37,8 @@ interface GroupStoreState {
   isLoading: boolean;
   loadGroups: (userId: string) => Promise<void>;
   createGroup: (userId: string, userName: string, name: string) => Promise<Group>;
+  renameGroup: (groupId: string, name: string) => Promise<Group>;
+  setDefaultGroup: (userId: string, groupId: string) => Promise<Group>;
   deleteGroup: (groupId: string) => Promise<void>;
   generateInviteForGroup: (groupId: string) => GroupInviteBundle;
   joinGroupFromInvite: (
@@ -66,6 +68,10 @@ const createMembers = (
       joinedAt,
     },
   ];
+};
+
+const sortGroupsByCreatedAt = (groups: ReadonlyArray<Group>): Group[] => {
+  return [...groups].sort((left, right) => left.createdAt - right.createdAt);
 };
 
 export const useGroupStore = create<GroupStoreState>((set, get) => ({
@@ -104,10 +110,100 @@ export const useGroupStore = create<GroupStoreState>((set, get) => ({
     await createGroupRecord(group);
 
     set((state) => ({
-      groups: [...state.groups, group].sort((left, right) => left.createdAt - right.createdAt),
+      groups: sortGroupsByCreatedAt([...state.groups, group]),
     }));
 
     return group;
+  },
+
+  renameGroup: async (groupId, name) => {
+    const normalizedGroupId = groupId.trim();
+    const normalizedName = name.trim();
+
+    if (!normalizedGroupId) {
+      throw new Error('Group not found.');
+    }
+
+    if (!normalizedName) {
+      throw new Error('Group name is required.');
+    }
+
+    const currentGroups = get().groups;
+    const existingGroup = currentGroups.find((group) => group.id === normalizedGroupId);
+    if (!existingGroup) {
+      throw new Error('Group not found.');
+    }
+
+    if (existingGroup.name === normalizedName) {
+      return existingGroup;
+    }
+
+    const renamedGroup: Group = {
+      ...existingGroup,
+      name: normalizedName,
+      updatedAt: Date.now(),
+    };
+
+    await upsertGroupRecord(renamedGroup);
+
+    set({
+      groups: sortGroupsByCreatedAt(
+        currentGroups.map((group) =>
+          group.id === renamedGroup.id ? renamedGroup : group,
+        ),
+      ),
+    });
+
+    return renamedGroup;
+  },
+
+  setDefaultGroup: async (userId, groupId) => {
+    const normalizedGroupId = groupId.trim();
+    if (!normalizedGroupId) {
+      throw new Error('Group not found.');
+    }
+
+    const groups = await getGroupsByUser(userId);
+    const targetGroup = groups.find(
+      (group) => group.id === normalizedGroupId && isTravelGroup(group),
+    );
+
+    if (!targetGroup) {
+      throw new Error('Travel group not found.');
+    }
+
+    const timestamp = Date.now();
+    const updatedGroups = groups.map((group) => {
+      if (!isTravelGroup(group)) {
+        return group;
+      }
+
+      const shouldBeDefault = group.id === normalizedGroupId;
+      if (group.isDefault === shouldBeDefault) {
+        return group;
+      }
+
+      return {
+        ...group,
+        isDefault: shouldBeDefault,
+        updatedAt: timestamp,
+      };
+    });
+
+    await Promise.all(
+      updatedGroups.map((group, index) => {
+        if (group === groups[index]) {
+          return Promise.resolve();
+        }
+
+        return upsertGroupRecord(group);
+      }),
+    );
+
+    set({ groups: sortGroupsByCreatedAt(updatedGroups) });
+    return (
+      updatedGroups.find((group) => group.id === normalizedGroupId) ?? targetGroup
+    );
   },
 
   deleteGroup: async (groupId) => {
@@ -182,12 +278,12 @@ export const useGroupStore = create<GroupStoreState>((set, get) => ({
 
     await upsertGroupRecord(mergedGroup);
 
-    set((state) => {
-      const rest = state.groups.filter((group) => group.id !== mergedGroup.id);
-      return {
-        groups: [...rest, mergedGroup].sort((left, right) => left.createdAt - right.createdAt),
-      };
-    });
+      set((state) => {
+        const rest = state.groups.filter((group) => group.id !== mergedGroup.id);
+        return {
+          groups: sortGroupsByCreatedAt([...rest, mergedGroup]),
+        };
+      });
 
     return mergedGroup;
   },
@@ -283,6 +379,6 @@ export const useGroupStore = create<GroupStoreState>((set, get) => ({
   },
 
   setGroups: (groups) => {
-    set({ groups });
+    set({ groups: sortGroupsByCreatedAt(groups) });
   },
 }));

@@ -31,7 +31,7 @@ const recalculateSplits = (
   }
 
   if (transaction.splitType === 'equal') {
-    const splitAmount = nextConvertedAmount / transaction.splits.length;
+    const splitAmount = nextConvertedAmount / (transaction.splits.length + 1);
     return transaction.splits.map((split) => ({
       ...split,
       amount: splitAmount,

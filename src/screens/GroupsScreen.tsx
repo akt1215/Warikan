@@ -6,11 +6,28 @@ import * as Clipboard from 'expo-clipboard';
 
 import { DeleteGroupModal, GroupCard } from '../components/group';
 import { QRGenerator, QRScanner } from '../components/sync';
-import { Button, Card, Input, Picker, Typography } from '../components/common';
+import { Button, Card, Input, Modal, Picker, Typography } from '../components/common';
 import { colors, spacing } from '../constants';
 import type { RootStackParamList } from '../navigation/types';
+import type { Group } from '../types';
 import { useGroupStore, useTransactionStore, useUserStore } from '../store';
 import { isTravelGroup } from '../utils';
+
+const getPreferredTravelGroupId = (travelGroups: ReadonlyArray<Group>): string => {
+  const defaultGroup = travelGroups.reduce<Group | null>((latest, group) => {
+    if (!group.isDefault) {
+      return latest;
+    }
+
+    if (!latest || group.updatedAt > latest.updatedAt) {
+      return group;
+    }
+
+    return latest;
+  }, null);
+
+  return defaultGroup?.id ?? travelGroups[0]?.id ?? '';
+};
 
 export const GroupsScreen = (): React.JSX.Element => {
   const navigation = useNavigation<StackNavigationProp<RootStackParamList>>();
@@ -19,6 +36,8 @@ export const GroupsScreen = (): React.JSX.Element => {
   const groups = useGroupStore((state) => state.groups);
   const loadGroups = useGroupStore((state) => state.loadGroups);
   const createGroup = useGroupStore((state) => state.createGroup);
+  const renameGroup = useGroupStore((state) => state.renameGroup);
+  const setDefaultGroup = useGroupStore((state) => state.setDefaultGroup);
   const deleteGroup = useGroupStore((state) => state.deleteGroup);
   const generateInviteForGroup = useGroupStore((state) => state.generateInviteForGroup);
   const joinGroupFromInvite = useGroupStore((state) => state.joinGroupFromInvite);
@@ -36,6 +55,8 @@ export const GroupsScreen = (): React.JSX.Element => {
   const [deletingGroupId, setDeletingGroupId] = useState<string | null>(null);
   const [deletingGroupTransactionCount, setDeletingGroupTransactionCount] = useState(0);
   const [selectedMigrationTargetId, setSelectedMigrationTargetId] = useState('');
+  const [renamingGroupId, setRenamingGroupId] = useState<string | null>(null);
+  const [renamingGroupName, setRenamingGroupName] = useState('');
 
   useEffect(() => {
     if (user) {
@@ -56,7 +77,7 @@ export const GroupsScreen = (): React.JSX.Element => {
     }
 
     if (!travelGroups.some((group) => group.id === selectedInviteGroupId)) {
-      setSelectedInviteGroupId(travelGroups[0]?.id ?? '');
+      setSelectedInviteGroupId(getPreferredTravelGroupId(travelGroups));
     }
   }, [selectedInviteGroupId, travelGroups]);
 
@@ -95,6 +116,12 @@ export const GroupsScreen = (): React.JSX.Element => {
         value: group.id,
       }));
   }, [deletingGroupId, travelGroups]);
+
+  const renamingGroup = useMemo(() => {
+    return renamingGroupId
+      ? travelGroups.find((group) => group.id === renamingGroupId) ?? null
+      : null;
+  }, [renamingGroupId, travelGroups]);
 
   const handleCreateGroup = async (): Promise<void> => {
     if (!user) {
@@ -169,6 +196,44 @@ export const GroupsScreen = (): React.JSX.Element => {
       closeDeleteModal();
     } catch (error) {
       Alert.alert('Could not delete group', error instanceof Error ? error.message : 'Unknown error.');
+    }
+  };
+
+  const openRenameModal = (group: Group): void => {
+    setRenamingGroupId(group.id);
+    setRenamingGroupName(group.name);
+  };
+
+  const closeRenameModal = (): void => {
+    setRenamingGroupId(null);
+    setRenamingGroupName('');
+  };
+
+  const handleRenameGroup = async (): Promise<void> => {
+    if (!renamingGroupId) {
+      return;
+    }
+
+    try {
+      await renameGroup(renamingGroupId, renamingGroupName);
+      closeRenameModal();
+    } catch (error) {
+      Alert.alert('Could not rename group', error instanceof Error ? error.message : 'Unknown error.');
+    }
+  };
+
+  const handleSetDefaultGroup = async (groupId: string): Promise<void> => {
+    if (!user) {
+      return;
+    }
+
+    try {
+      await setDefaultGroup(user.id, groupId);
+      if (selectedInviteGroupId && selectedInviteGroupId !== groupId) {
+        setSelectedInviteGroupId(groupId);
+      }
+    } catch (error) {
+      Alert.alert('Could not update default group', error instanceof Error ? error.message : 'Unknown error.');
     }
   };
 
@@ -315,15 +380,37 @@ export const GroupsScreen = (): React.JSX.Element => {
               group={group}
               onPress={() => navigation.navigate('GroupDetail', { groupId: group.id })}
             />
-            {!group.isDefault ? (
+            <View style={styles.groupActions}>
               <Button
                 onPress={() => {
-                  void handleDeleteGroup(group.id);
+                  openRenameModal(group);
                 }}
-                title="Delete"
-                variant="danger"
+                title="Rename"
+                variant="secondary"
               />
-            ) : null}
+              {!group.isDefault ? (
+                <Button
+                  onPress={() => {
+                    void handleSetDefaultGroup(group.id);
+                  }}
+                  title="Set as Default"
+                  variant="secondary"
+                />
+              ) : (
+                <Typography variant="caption">
+                  Default group is preselected for new transactions.
+                </Typography>
+              )}
+              {!group.isDefault ? (
+                <Button
+                  onPress={() => {
+                    void handleDeleteGroup(group.id);
+                  }}
+                  title="Delete"
+                  variant="danger"
+                />
+              ) : null}
+            </View>
           </View>
         ))}
         {travelGroups.length === 0 ? (
@@ -348,6 +435,28 @@ export const GroupsScreen = (): React.JSX.Element => {
         transactionCount={deletingGroupTransactionCount}
         visible={Boolean(deletingGroupId)}
       />
+
+      <Modal
+        title={renamingGroup ? `Rename "${renamingGroup.name}"` : 'Rename group'}
+        visible={Boolean(renamingGroupId)}
+        onClose={closeRenameModal}
+      >
+        <View style={styles.modalSection}>
+          <Input
+            label="Group name"
+            onChangeText={setRenamingGroupName}
+            placeholder="e.g. Summer Trip"
+            value={renamingGroupName}
+          />
+          <Button
+            onPress={() => {
+              void handleRenameGroup();
+            }}
+            title="Save Name"
+          />
+          <Button onPress={closeRenameModal} title="Cancel" variant="secondary" />
+        </View>
+      </Modal>
     </ScrollView>
   );
 };
@@ -367,11 +476,17 @@ const styles = StyleSheet.create({
   groupRow: {
     gap: spacing.sm,
   },
+  groupActions: {
+    gap: spacing.sm,
+  },
   cardSection: {
     gap: spacing.sm,
     marginTop: spacing.md,
   },
   passphraseSection: {
+    gap: spacing.sm,
+  },
+  modalSection: {
     gap: spacing.sm,
   },
 });

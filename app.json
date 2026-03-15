@@ -14,10 +14,12 @@
       "**/*"
     ],
     "ios": {
+      "icon": "./assets/icon.png",
       "supportsTablet": true,
       "bundleIdentifier": "com.anonymous.warikan"
     },
     "android": {
+      "icon": "./assets/adaptive-icon.png",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#0F172A"
@@ -35,7 +37,8 @@
         {
           "cameraPermission": "Allow Warikan to scan QR codes for group invites and sync."
         }
-      ]
+      ],
+      "expo-font"
     ]
   }
 }

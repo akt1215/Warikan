@@ -378,10 +378,12 @@ const mergeSyncedGroup = (localGroup: Group, remoteGroup: Group | null): Group =
     };
   }
 
+  const useLocalMetadata = localGroup.updatedAt >= remoteGroup.updatedAt;
+
   return {
     id: localGroup.id,
-    name: localGroup.updatedAt >= remoteGroup.updatedAt ? localGroup.name : remoteGroup.name,
-    isDefault: localGroup.isDefault || remoteGroup.isDefault,
+    name: useLocalMetadata ? localGroup.name : remoteGroup.name,
+    isDefault: useLocalMetadata ? localGroup.isDefault : remoteGroup.isDefault,
     createdBy: remoteGroup.createdBy || localGroup.createdBy,
     members: mergeGroupMembers(remoteGroup.members, localGroup.members),
     createdAt: Math.min(localGroup.createdAt, remoteGroup.createdAt),

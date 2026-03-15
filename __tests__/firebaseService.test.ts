@@ -160,6 +160,37 @@ describe('firebaseService.syncTransactions', () => {
     expect(result.noOpReason).toBe('No shared cloud groups were found for this user.');
     expect(result.message).toContain('Scoped 0 group(s).');
   });
+
+  test('uses newest group metadata for default and name during merge', async () => {
+    const localGroup = baseGroup({
+      id: 'group-shared',
+      name: 'Renamed Group',
+      isDefault: false,
+      updatedAt: 300,
+    });
+    const discoveredGroup = baseGroup({
+      id: 'group-shared',
+      name: 'Older Name',
+      isDefault: true,
+      updatedAt: 100,
+    });
+
+    jest.spyOn(firebaseService, 'pullTransactions').mockResolvedValue([]);
+    jest.spyOn(firebaseService, 'pullGroupsForMember').mockResolvedValue([discoveredGroup]);
+
+    const result = await firebaseService.syncTransactions(
+      [],
+      [localGroup.id],
+      [localGroup],
+      [],
+      'user-1',
+      [],
+    );
+
+    const mergedGroup = result.syncedGroups.find((group) => group.id === localGroup.id);
+    expect(mergedGroup?.name).toBe('Renamed Group');
+    expect(mergedGroup?.isDefault).toBe(false);
+  });
 });
 
 describe('firebaseService cloud toggle', () => {

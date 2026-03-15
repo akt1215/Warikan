@@ -1,4 +1,5 @@
 import type { CurrencyAcquisition } from './currency';
+import type { Group } from './group';
 import type { Transaction } from './transaction';
 
 export interface TransactionTombstone {
@@ -16,6 +17,7 @@ export interface SyncPayload {
   currencyAcquisitions?: CurrencyAcquisition[];
   participantProfiles?: Record<string, string>;
   transactionTombstones?: TransactionTombstone[];
+  groups?: Group[];
 }
 
 export interface SyncMergeResult {

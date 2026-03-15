@@ -3,6 +3,8 @@ import 'react-native-get-random-values';
 import React, { useEffect } from 'react';
 import { ActivityIndicator, StatusBar, StyleSheet, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import { useFonts } from 'expo-font';
 
 import { colors } from './src/constants';
 import { RootNavigator } from './src/navigation/RootNavigator';
@@ -12,6 +14,7 @@ import { useUserStore } from './src/store';
 export default function App(): React.JSX.Element {
   const initializeUser = useUserStore((state) => state.initialize);
   const hasHydrated = useUserStore((state) => state.hasHydrated);
+  const [areIconFontsLoaded, iconFontLoadError] = useFonts(Ionicons.font);
 
   useEffect(() => {
     const bootstrap = async (): Promise<void> => {
@@ -22,7 +25,7 @@ export default function App(): React.JSX.Element {
     void bootstrap();
   }, [initializeUser]);
 
-  if (!hasHydrated) {
+  if (!hasHydrated || (!areIconFontsLoaded && !iconFontLoadError)) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator color={colors.primary} size="large" />

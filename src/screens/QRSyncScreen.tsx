@@ -11,12 +11,14 @@ import {
   refreshTransactionsForBalance,
 } from '../services';
 import { useCurrencyStore, useGroupStore, useSyncStore, useTransactionStore, useUserStore } from '../store';
+import { isTravelGroup } from '../utils';
 
 export const QRSyncScreen = (): React.JSX.Element => {
   const user = useUserStore((state) => state.user);
   const setLastSyncedAt = useUserStore((state) => state.setLastSyncedAt);
   const groups = useGroupStore((state) => state.groups);
   const loadGroups = useGroupStore((state) => state.loadGroups);
+  const upsertSyncedGroups = useGroupStore((state) => state.upsertSyncedGroups);
   const reconcileMembersFromTransactions = useGroupStore(
     (state) => state.reconcileMembersFromTransactions,
   );
@@ -87,6 +89,7 @@ export const QRSyncScreen = (): React.JSX.Element => {
       participantProfiles,
       tombstones,
       acquisitions,
+      groups.filter(isTravelGroup),
     );
     setGeneratedPayload(payload);
   };
@@ -117,6 +120,10 @@ export const QRSyncScreen = (): React.JSX.Element => {
         );
       }
 
+      const syncedGroupsCount = user
+        ? await upsertSyncedGroups(user.id, parsedPayload.groups ?? [])
+        : 0;
+
       const refreshed = user
         ? refreshTransactionsForBalance({
           transactions: mergedTransactions,
@@ -145,7 +152,7 @@ export const QRSyncScreen = (): React.JSX.Element => {
       await setLastSyncedAt(Date.now());
       Alert.alert(
         'Merge complete',
-        `Added ${result.added}, updated ${result.updated}, skipped ${result.skipped}.${membersSummary}`,
+        `Added ${result.added}, updated ${result.updated}, skipped ${result.skipped}. Imported ${syncedGroupsCount} group(s).${membersSummary}`,
       );
     } catch (error) {
       Alert.alert('Merge failed', error instanceof Error ? error.message : 'Invalid payload.');

@@ -2,6 +2,7 @@ import { create } from 'zustand';
 
 import type {
   CurrencyAcquisition,
+  Group,
   SyncMergeResult,
   Transaction,
   TransactionTombstone,
@@ -18,6 +19,7 @@ interface SyncStoreState {
     participantProfiles?: Readonly<Record<string, string>>,
     transactionTombstones?: ReadonlyArray<TransactionTombstone>,
     currencyAcquisitions?: ReadonlyArray<CurrencyAcquisition>,
+    groups?: ReadonlyArray<Group>,
   ) => string;
   mergePayload: (
     localTransactions: ReadonlyArray<Transaction>,
@@ -36,6 +38,7 @@ export const useSyncStore = create<SyncStoreState>((set) => ({
     participantProfiles = {},
     transactionTombstones = [],
     currencyAcquisitions = [],
+    groups = [],
   ) => {
     const payload = createSyncPayload(
       transactions,
@@ -44,6 +47,7 @@ export const useSyncStore = create<SyncStoreState>((set) => ({
       participantProfiles,
       transactionTombstones,
       currencyAcquisitions,
+      groups,
     );
     set({ lastPayload: payload });
     return payload;

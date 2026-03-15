@@ -15,6 +15,7 @@
     "test": "jest --runInBand"
   },
   "dependencies": {
+    "@expo/vector-icons": "~14.0.4",
     "@react-native-async-storage/async-storage": "1.23.1",
     "@react-navigation/bottom-tabs": "^7.0.0",
     "@react-navigation/native": "^7.0.0",
@@ -25,6 +26,7 @@
     "expo-asset": "~11.0.5",
     "expo-camera": "~16.0.0",
     "expo-clipboard": "~7.0.1",
+    "expo-font": "~13.0.4",
     "expo-sqlite": "~15.0.6",
     "expo-status-bar": "~2.0.0",
     "expo-system-ui": "~4.0.9",

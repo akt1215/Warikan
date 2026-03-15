@@ -12,7 +12,7 @@ import {
   TRANSACTION_LABELS,
 } from '../constants';
 import { convertToBaseCurrency } from '../services';
-import type { SplitType } from '../types';
+import type { Group, SplitType } from '../types';
 import {
   useCurrencyStore,
   useGroupStore,
@@ -24,6 +24,22 @@ import { isTravelGroup } from '../utils';
 const toNumber = (value: string): number => {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const getPreferredTravelGroupId = (travelGroups: ReadonlyArray<Group>): string => {
+  const defaultGroup = travelGroups.reduce<Group | null>((latest, group) => {
+    if (!group.isDefault) {
+      return latest;
+    }
+
+    if (!latest || group.updatedAt > latest.updatedAt) {
+      return group;
+    }
+
+    return latest;
+  }, null);
+
+  return defaultGroup?.id ?? travelGroups[0]?.id ?? '';
 };
 
 export const AddTransactionScreen = (): React.JSX.Element => {
@@ -72,7 +88,7 @@ export const AddTransactionScreen = (): React.JSX.Element => {
     }
 
     if (!travelGroups.some((group) => group.id === selectedGroupId)) {
-      setSelectedGroupId(travelGroups[0]?.id ?? '');
+      setSelectedGroupId(getPreferredTravelGroupId(travelGroups));
     }
   }, [selectedGroupId, travelGroups]);
 
@@ -317,7 +333,7 @@ export const AddTransactionScreen = (): React.JSX.Element => {
         splitType === 'equal'
           ? debtors.map((debtor) => ({
               userId: debtor,
-              amount: convertedAmount / debtors.length,
+              amount: convertedAmount / (debtors.length + 1),
               isPaid: false,
             }))
           : customSplitValues.map((entry) => ({

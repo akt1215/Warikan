@@ -8,3 +8,4 @@ export * from './HomeScreen';
 export * from './OnboardingScreen';
 export * from './QRSyncScreen';
 export * from './SettingsScreen';
+export * from './SyncScreen';

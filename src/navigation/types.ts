@@ -9,6 +9,7 @@ export type MainTabParamList = {
   Groups: undefined;
   AddTransaction: undefined;
   History: undefined;
+  Sync: undefined;
   Settings: undefined;
 };
 

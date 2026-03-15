@@ -71,7 +71,7 @@ describe('transactionRefreshService', () => {
     expect(result.dedupedCount).toBe(1);
     expect(result.recalculatedCount).toBe(1);
     expect(result.transactions[0]?.convertedAmount).toBeCloseTo(15, 4);
-    expect(result.transactions[0]?.splits[0]?.amount).toBeCloseTo(15, 4);
+    expect(result.transactions[0]?.splits[0]?.amount).toBeCloseTo(7.5, 4);
   });
 
   test('rescales custom splits using refreshed conversion', () => {
@@ -148,7 +148,7 @@ describe('transactionRefreshService', () => {
     expect(result.processedCount).toBe(1);
     expect(result.recalculatedCount).toBe(1);
     expect(result.transactions[0]?.convertedAmount).toBeCloseTo(50, 4);
-    expect(result.transactions[0]?.splits[0]?.amount).toBeCloseTo(50, 4);
+    expect(result.transactions[0]?.splits[0]?.amount).toBeCloseTo(25, 4);
   });
 
   test('recalculates using payer-specific acquisitions', () => {
@@ -193,6 +193,34 @@ describe('transactionRefreshService', () => {
 
     expect(result.recalculatedCount).toBe(1);
     expect(result.transactions[0]?.convertedAmount).toBeCloseTo(20, 4);
-    expect(result.transactions[0]?.splits[0]?.amount).toBeCloseTo(20, 4);
+    expect(result.transactions[0]?.splits[0]?.amount).toBeCloseTo(10, 4);
+  });
+
+  test('equal split uses payer-inclusive participant count', () => {
+    const transactions: Transaction[] = [
+      buildTransaction({
+        id: 'tx-equal-payer-inclusive',
+        syncId: 'sync-equal-payer-inclusive',
+        amount: 90,
+        originalCurrency: 'USD',
+        convertedAmount: 90,
+        splitType: 'equal',
+        splits: [
+          { userId: 'user-2', amount: 45, isPaid: false },
+          { userId: 'user-3', amount: 45, isPaid: false },
+        ],
+      }),
+    ];
+
+    const result = refreshTransactionsForBalance({
+      transactions,
+      baseCurrency: 'USD',
+      acquisitions: [],
+      getMarketRate: () => null,
+    });
+
+    expect(result.recalculatedCount).toBe(1);
+    expect(result.transactions[0]?.splits[0]?.amount).toBeCloseTo(30, 4);
+    expect(result.transactions[0]?.splits[1]?.amount).toBeCloseTo(30, 4);
   });
 });

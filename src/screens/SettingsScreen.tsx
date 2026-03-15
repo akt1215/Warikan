@@ -7,26 +7,13 @@ import { Button, Card, Input, Picker, Typography } from '../components/common';
 import { CURRENCY_LABELS, colors, spacing, SUPPORTED_CURRENCIES } from '../constants';
 import type { RootStackParamList } from '../navigation/types';
 import { firebaseService } from '../services';
-import { useCurrencyStore, useGroupStore, useTransactionStore, useUserStore } from '../store';
-import { isTravelGroup } from '../utils';
+import { useCurrencyStore, useUserStore } from '../store';
 
 export const SettingsScreen = (): React.JSX.Element => {
   const navigation = useNavigation<NavigationProp<RootStackParamList>>();
   const user = useUserStore((state) => state.user);
   const updateProfile = useUserStore((state) => state.updateProfile);
-  const loadAcquisitions = useCurrencyStore((state) => state.loadAcquisitions);
   const refreshRates = useCurrencyStore((state) => state.refreshMarketRates);
-  const loadGroups = useGroupStore((state) => state.loadGroups);
-  const upsertSyncedGroups = useGroupStore((state) => state.upsertSyncedGroups);
-  const reconcileMembersFromTransactions = useGroupStore(
-    (state) => state.reconcileMembersFromTransactions,
-  );
-  const loadTransactions = useTransactionStore((state) => state.loadTransactions);
-  const replaceTransactions = useTransactionStore((state) => state.replaceTransactions);
-  const upsertTombstones = useTransactionStore((state) => state.upsertTombstones);
-  const replaceSyncedUserAcquisitions = useCurrencyStore(
-    (state) => state.replaceSyncedUserAcquisitions,
-  );
 
   const [name, setName] = useState(user?.name ?? '');
   const [baseCurrency, setBaseCurrency] = useState(user?.baseCurrency ?? 'USD');
@@ -186,7 +173,7 @@ export const SettingsScreen = (): React.JSX.Element => {
       </Card>
 
       <Card>
-        <Typography variant="h4">Sync</Typography>
+        <Typography variant="h4">Cloud Sync Settings</Typography>
         <View style={styles.cardBody}>
           <Button
             disabled={isCloudToggleLoading}
@@ -251,79 +238,6 @@ export const SettingsScreen = (): React.JSX.Element => {
               void clearCloudConfig();
             }}
             title="Clear Saved Cloud Config"
-            variant="secondary"
-          />
-          <Button
-            onPress={() => {
-              navigation.navigate('QRSync');
-            }}
-            title="QR Sync"
-            variant="secondary"
-          />
-          <Button
-            onPress={() => {
-              if (!user) {
-                return;
-              }
-              if (!isCloudSyncEnabled) {
-                Alert.alert(
-                  'Cloud sync disabled',
-                  'Enable Firebase Cloud Sync first to run cloud sync.',
-                );
-                return;
-              }
-
-              void (async () => {
-                try {
-                  await loadGroups(user.id);
-                  await loadAcquisitions(user.id);
-                  await loadTransactions();
-                  const groups = useGroupStore.getState().groups;
-                  const transactions = useTransactionStore.getState().transactions;
-                  const tombstones = useTransactionStore.getState().tombstones;
-                  const currentUserAcquisitions = useCurrencyStore.getState().acquisitions;
-                  const travelGroupIds = groups
-                    .filter(isTravelGroup)
-                    .map((group) => group.id);
-
-                  const result = await firebaseService.syncTransactions(
-                    transactions,
-                    travelGroupIds,
-                    groups,
-                    tombstones,
-                    user.id,
-                    currentUserAcquisitions,
-                  );
-                  const syncedGroupsCount = await upsertSyncedGroups(user.id, result.syncedGroups);
-                  await replaceTransactions(result.merged);
-                  await upsertTombstones(result.tombstones);
-                  for (const [syncedUserId, syncedAcquisitions] of Object.entries(result.acquisitionsByUser)) {
-                    await replaceSyncedUserAcquisitions(
-                      user.id,
-                      syncedUserId,
-                      syncedAcquisitions,
-                    );
-                  }
-                  const reconciliation = await reconcileMembersFromTransactions(
-                    user.id,
-                    result.merged,
-                    result.participantProfiles,
-                  );
-
-                  Alert.alert(
-                    result.success ? 'Cloud sync complete' : 'Cloud sync skipped',
-                    `${result.message} Added ${result.added}, updated ${result.updated}, skipped ${result.skipped}. Pulled ${result.pulledCount} transaction(s) and ${result.pulledTombstoneCount} deletion(s). Imported ${syncedGroupsCount} group(s). Members added ${reconciliation.membersAdded} across ${reconciliation.groupsUpdated} group(s).`,
-                  );
-                } catch (error) {
-                  Alert.alert(
-                    'Cloud sync failed',
-                    error instanceof Error ? error.message : 'Unknown error.',
-                  );
-                }
-              })();
-            }}
-            title="Cloud Sync"
-            disabled={!isCloudSyncEnabled}
             variant="secondary"
           />
         </View>
