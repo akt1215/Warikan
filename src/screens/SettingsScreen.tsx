@@ -17,6 +17,7 @@ export const SettingsScreen = (): React.JSX.Element => {
   const loadAcquisitions = useCurrencyStore((state) => state.loadAcquisitions);
   const refreshRates = useCurrencyStore((state) => state.refreshMarketRates);
   const loadGroups = useGroupStore((state) => state.loadGroups);
+  const upsertSyncedGroups = useGroupStore((state) => state.upsertSyncedGroups);
   const reconcileMembersFromTransactions = useGroupStore(
     (state) => state.reconcileMembersFromTransactions,
   );
@@ -35,6 +36,8 @@ export const SettingsScreen = (): React.JSX.Element => {
   const [firebaseStorageBucket, setFirebaseStorageBucket] = useState('');
   const [firebaseMessagingSenderId, setFirebaseMessagingSenderId] = useState('');
   const [firebaseAppId, setFirebaseAppId] = useState('');
+  const [isCloudSyncEnabled, setIsCloudSyncEnabled] = useState(false);
+  const [isCloudToggleLoading, setIsCloudToggleLoading] = useState(true);
 
   const currencyOptions = useMemo(() => {
     return SUPPORTED_CURRENCIES.map((currency) => ({
@@ -63,19 +66,52 @@ export const SettingsScreen = (): React.JSX.Element => {
 
   useEffect(() => {
     void (async () => {
-      const runtimeConfig = await firebaseService.getRuntimeConfigInput();
-      if (!runtimeConfig) {
-        return;
-      }
+      try {
+        const [runtimeConfig, cloudSyncEnabled] = await Promise.all([
+          firebaseService.getRuntimeConfigInput(),
+          firebaseService.isCloudSyncEnabled(),
+        ]);
 
-      setFirebaseApiKey(runtimeConfig.apiKey);
-      setFirebaseAuthDomain(runtimeConfig.authDomain);
-      setFirebaseProjectId(runtimeConfig.projectId);
-      setFirebaseStorageBucket(runtimeConfig.storageBucket);
-      setFirebaseMessagingSenderId(runtimeConfig.messagingSenderId);
-      setFirebaseAppId(runtimeConfig.appId);
+        setIsCloudSyncEnabled(cloudSyncEnabled);
+
+        if (!runtimeConfig) {
+          return;
+        }
+
+        setFirebaseApiKey(runtimeConfig.apiKey);
+        setFirebaseAuthDomain(runtimeConfig.authDomain);
+        setFirebaseProjectId(runtimeConfig.projectId);
+        setFirebaseStorageBucket(runtimeConfig.storageBucket);
+        setFirebaseMessagingSenderId(runtimeConfig.messagingSenderId);
+        setFirebaseAppId(runtimeConfig.appId);
+      } finally {
+        setIsCloudToggleLoading(false);
+      }
     })();
   }, []);
+
+  const toggleCloudSync = async (): Promise<void> => {
+    if (isCloudToggleLoading) {
+      return;
+    }
+
+    const nextEnabled = !isCloudSyncEnabled;
+    try {
+      await firebaseService.setCloudSyncEnabled(nextEnabled);
+      setIsCloudSyncEnabled(nextEnabled);
+      Alert.alert(
+        nextEnabled ? 'Cloud sync enabled' : 'Cloud sync disabled',
+        nextEnabled
+          ? 'Firebase cloud sync is now enabled.'
+          : 'Firebase calls are now skipped on this device.',
+      );
+    } catch (error) {
+      Alert.alert(
+        'Could not update cloud sync setting',
+        error instanceof Error ? error.message : 'Unknown error.',
+      );
+    }
+  };
 
   const saveCloudConfig = async (): Promise<void> => {
     try {
@@ -152,6 +188,23 @@ export const SettingsScreen = (): React.JSX.Element => {
       <Card>
         <Typography variant="h4">Sync</Typography>
         <View style={styles.cardBody}>
+          <Button
+            disabled={isCloudToggleLoading}
+            onPress={() => {
+              void toggleCloudSync();
+            }}
+            title={
+              isCloudToggleLoading
+                ? 'Loading Cloud Sync...'
+                : isCloudSyncEnabled
+                  ? 'Disable Firebase Cloud Sync'
+                  : 'Enable Firebase Cloud Sync'
+            }
+            variant={isCloudSyncEnabled ? 'secondary' : 'primary'}
+          />
+          <Typography variant="caption">
+            Firebase cloud sync is currently {isCloudSyncEnabled ? 'ON' : 'OFF'} on this device.
+          </Typography>
           <Typography variant="bodySmall">Cloud Sync Setup (Firebase)</Typography>
           <Typography variant="caption">
             Keep secrets out of git. Prefer `.env.local` or saving config on this device only.
@@ -212,6 +265,13 @@ export const SettingsScreen = (): React.JSX.Element => {
               if (!user) {
                 return;
               }
+              if (!isCloudSyncEnabled) {
+                Alert.alert(
+                  'Cloud sync disabled',
+                  'Enable Firebase Cloud Sync first to run cloud sync.',
+                );
+                return;
+              }
 
               void (async () => {
                 try {
@@ -234,6 +294,7 @@ export const SettingsScreen = (): React.JSX.Element => {
                     user.id,
                     currentUserAcquisitions,
                   );
+                  const syncedGroupsCount = await upsertSyncedGroups(user.id, result.syncedGroups);
                   await replaceTransactions(result.merged);
                   await upsertTombstones(result.tombstones);
                   for (const [syncedUserId, syncedAcquisitions] of Object.entries(result.acquisitionsByUser)) {
@@ -251,7 +312,7 @@ export const SettingsScreen = (): React.JSX.Element => {
 
                   Alert.alert(
                     result.success ? 'Cloud sync complete' : 'Cloud sync skipped',
-                    `${result.message} Added ${result.added}, updated ${result.updated}, skipped ${result.skipped}. Members added ${reconciliation.membersAdded} across ${reconciliation.groupsUpdated} group(s).`,
+                    `${result.message} Added ${result.added}, updated ${result.updated}, skipped ${result.skipped}. Pulled ${result.pulledCount} transaction(s) and ${result.pulledTombstoneCount} deletion(s). Imported ${syncedGroupsCount} group(s). Members added ${reconciliation.membersAdded} across ${reconciliation.groupsUpdated} group(s).`,
                   );
                 } catch (error) {
                   Alert.alert(
@@ -262,6 +323,7 @@ export const SettingsScreen = (): React.JSX.Element => {
               })();
             }}
             title="Cloud Sync"
+            disabled={!isCloudSyncEnabled}
             variant="secondary"
           />
         </View>

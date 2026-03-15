@@ -49,6 +49,7 @@ interface GroupStoreState {
     transactions: ReadonlyArray<Transaction>,
     profileNamesByUserId?: Readonly<Record<string, string>>,
   ) => Promise<ReconcileMembersResult>;
+  upsertSyncedGroups: (userId: string, groups: ReadonlyArray<Group>) => Promise<number>;
   refreshGroupMembers: (userId: string, groupId: string) => Promise<GroupRefreshResult>;
   setGroups: (groups: Group[]) => void;
 }
@@ -203,6 +204,15 @@ export const useGroupStore = create<GroupStoreState>((set, get) => ({
       };
     }
 
+    const isCloudSyncEnabled = await firebaseService.isCloudSyncEnabled();
+    if (!isCloudSyncEnabled) {
+      set({ groups });
+      return {
+        group: localGroup,
+        cloudSynced: false,
+      };
+    }
+
     const syncResult = await firebaseService.syncGroup(localGroup);
     await upsertGroupRecord(syncResult.group);
 
@@ -242,6 +252,34 @@ export const useGroupStore = create<GroupStoreState>((set, get) => ({
       groupsUpdated: reconciled.groupsUpdated,
       membersAdded: reconciled.membersAdded,
     };
+  },
+
+  upsertSyncedGroups: async (userId, groups) => {
+    if (groups.length === 0) {
+      return 0;
+    }
+
+    const deduped = new Map<string, Group>();
+    for (const group of groups) {
+      const groupId = group.id.trim();
+      if (!groupId) {
+        continue;
+      }
+
+      deduped.set(groupId, {
+        ...group,
+        id: groupId,
+        members: mergeGroupMembers(group.members),
+      });
+    }
+
+    for (const group of deduped.values()) {
+      await upsertGroupRecord(group);
+    }
+
+    const refreshedGroups = await getGroupsByUser(userId);
+    set({ groups: refreshedGroups });
+    return deduped.size;
   },
 
   setGroups: (groups) => {

@@ -18,6 +18,7 @@ export const HomeScreen = (): React.JSX.Element => {
   const upsertTombstones = useTransactionStore((state) => state.upsertTombstones);
   const groups = useGroupStore((state) => state.groups);
   const loadGroups = useGroupStore((state) => state.loadGroups);
+  const upsertSyncedGroups = useGroupStore((state) => state.upsertSyncedGroups);
   const reconcileMembersFromTransactions = useGroupStore(
     (state) => state.reconcileMembersFromTransactions,
   );
@@ -89,42 +90,62 @@ export const HomeScreen = (): React.JSX.Element => {
       const latestTombstones = useTransactionStore.getState().tombstones;
       const latestGroups = useGroupStore.getState().groups;
       const latestCurrentUserAcquisitions = useCurrencyStore.getState().acquisitions;
-
-      const travelGroupIds = latestGroups
-        .filter(isTravelGroup)
-        .map((group) => group.id);
-
-      const cloudSyncResult = await firebaseService.syncTransactions(
-        latestTransactions,
-        travelGroupIds,
-        latestGroups,
-        latestTombstones,
-        user.id,
-        latestCurrentUserAcquisitions,
-      );
-      for (const [syncedUserId, syncedAcquisitions] of Object.entries(cloudSyncResult.acquisitionsByUser)) {
-        await replaceSyncedUserAcquisitions(user.id, syncedUserId, syncedAcquisitions);
-      }
-      const memberReconciliationResult = await reconcileMembersFromTransactions(
-        user.id,
-        cloudSyncResult.merged,
-        cloudSyncResult.participantProfiles,
-      );
       const latestAllAcquisitions = useCurrencyStore.getState().allAcquisitions;
+      const isCloudSyncEnabled = await firebaseService.isCloudSyncEnabled();
+
+      let transactionsForRefresh = latestTransactions;
+      let tombstonesForRefresh = latestTombstones;
+      let cloudSyncSummary = 'Cloud sync is disabled in settings.';
+      let memberReconciliationResult = {
+        groupsUpdated: 0,
+        membersAdded: 0,
+      };
+
+      if (isCloudSyncEnabled) {
+        const travelGroupIds = latestGroups
+          .filter(isTravelGroup)
+          .map((group) => group.id);
+
+        const cloudSyncResult = await firebaseService.syncTransactions(
+          latestTransactions,
+          travelGroupIds,
+          latestGroups,
+          latestTombstones,
+          user.id,
+          latestCurrentUserAcquisitions,
+        );
+        const syncedGroupsCount = await upsertSyncedGroups(user.id, cloudSyncResult.syncedGroups);
+        for (const [syncedUserId, syncedAcquisitions] of Object.entries(cloudSyncResult.acquisitionsByUser)) {
+          await replaceSyncedUserAcquisitions(user.id, syncedUserId, syncedAcquisitions);
+        }
+        memberReconciliationResult = await reconcileMembersFromTransactions(
+          user.id,
+          cloudSyncResult.merged,
+          cloudSyncResult.participantProfiles,
+        );
+        transactionsForRefresh = cloudSyncResult.merged;
+        tombstonesForRefresh = cloudSyncResult.tombstones;
+
+        const noOpSuffix = cloudSyncResult.noOpReason
+          ? ` ${cloudSyncResult.noOpReason}`
+          : '';
+        cloudSyncSummary = `Cloud scope ${cloudSyncResult.scopeGroupCount} group(s), pulled ${cloudSyncResult.pulledCount} transaction(s) and ${cloudSyncResult.pulledTombstoneCount} deletion(s), pushed ${cloudSyncResult.pushedCount} cloud record(s), imported ${syncedGroupsCount} group(s).${noOpSuffix}`;
+      } else {
+        memberReconciliationResult = await reconcileMembersFromTransactions(user.id, latestTransactions);
+      }
 
       const refreshed = refreshTransactionsForBalance({
-        transactions: cloudSyncResult.merged,
+        transactions: transactionsForRefresh,
         baseCurrency: user.baseCurrency,
         acquisitions: latestAllAcquisitions,
         getMarketRate,
       });
 
       await replaceTransactions(refreshed.transactions);
-      await upsertTombstones(cloudSyncResult.tombstones);
-
+      await upsertTombstones(tombstonesForRefresh);
       Alert.alert(
         'Balances refreshed',
-        `Reprocessed ${refreshed.processedCount} transaction(s), recalculated ${refreshed.recalculatedCount}, removed ${refreshed.dedupedCount} local duplicate(s), synced ${cloudSyncResult.syncedCount} cloud record(s), and added ${memberReconciliationResult.membersAdded} member(s) across ${memberReconciliationResult.groupsUpdated} group(s).`,
+        `Reprocessed ${refreshed.processedCount} transaction(s), recalculated ${refreshed.recalculatedCount}, removed ${refreshed.dedupedCount} local duplicate(s). ${cloudSyncSummary} Added ${memberReconciliationResult.membersAdded} member(s) across ${memberReconciliationResult.groupsUpdated} group(s).`,
       );
     } catch (error) {
       Alert.alert(

@@ -59,6 +59,8 @@ npm run ios
 ## Cloud sync (without QR)
 
 - Do **not** commit Firebase secrets to git.
+- Firebase cloud sync can be turned ON/OFF from **Settings → Sync → Enable/Disable Firebase Cloud Sync**.
+- Cloud sync is **OFF by default** on each device; when OFF, all Firebase calls are skipped.
 - Preferred setup: create `.env.local` (gitignored) using `.env.example` and set `EXPO_PUBLIC_FIREBASE_*` values there.
 - You can also configure Firebase on-device via **Settings → Sync → Cloud Sync Setup**.
 - In Firebase Console, enable:

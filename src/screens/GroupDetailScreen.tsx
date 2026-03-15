@@ -42,7 +42,7 @@ export const GroupDetailScreen = (): React.JSX.Element => {
       } else if (!result.cloudSynced) {
         Alert.alert(
           'Refreshed locally',
-          'Cloud sync is not configured, so members were refreshed from local data only.',
+          'Cloud sync is disabled or not configured, so members were refreshed from local data only.',
         );
       }
     } catch (error) {

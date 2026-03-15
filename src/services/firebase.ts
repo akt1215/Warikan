@@ -47,8 +47,12 @@ export interface FirebaseSyncResult {
 
 export interface FirebaseSyncMergeResult extends SyncMergeResult, FirebaseSyncResult {
   pulledCount: number;
+  pulledTombstoneCount: number;
   pushedCount: number;
+  scopeGroupCount: number;
   participantProfiles: Record<string, string>;
+  syncedGroups: Group[];
+  noOpReason: string | null;
   tombstones: TransactionTombstone[];
   acquisitionsByUser: Record<string, CurrencyAcquisition[]>;
 }
@@ -73,6 +77,7 @@ const FIREBASE_GROUP_COLLECTION = 'groups';
 const FIREBASE_TOMBSTONE_COLLECTION = 'transaction_tombstones';
 const FIREBASE_ACQUISITION_COLLECTION = 'user_acquisitions';
 const FIREBASE_CONFIG_STORAGE_KEY = '@warikan/firebase-config';
+const FIREBASE_ENABLED_STORAGE_KEY = '@warikan/firebase-enabled';
 
 // One-time script-level Firebase config shared by all users of this app build.
 // SECURITY: keep real values out of git. Prefer EXPO_PUBLIC_FIREBASE_* env vars
@@ -96,6 +101,10 @@ const chunkArray = <T>(entries: ReadonlyArray<T>, size: number): T[][] => {
     chunks.push(entries.slice(index, index + size));
   }
   return chunks;
+};
+
+const normalizeGroupIds = (groupIds: ReadonlyArray<string>): string[] => {
+  return Array.from(new Set(groupIds.map((entry) => entry.trim()).filter(Boolean)));
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> => {
@@ -301,13 +310,18 @@ const parseGroupMembers = (
   return mergeGroupMembers(members);
 };
 
-const parseGroup = (value: unknown): Group | null => {
+const parseGroup = (value: unknown, fallbackId = ''): Group | null => {
   if (!isRecord(value)) {
     return null;
   }
 
+  const resolvedId = typeof value.id === 'string' && value.id.trim()
+    ? value.id
+    : fallbackId;
+  const normalizedId = resolvedId.trim();
+
   if (
-    typeof value.id !== 'string' ||
+    !normalizedId ||
     typeof value.name !== 'string' ||
     typeof value.isDefault !== 'boolean' ||
     typeof value.createdBy !== 'string' ||
@@ -317,13 +331,16 @@ const parseGroup = (value: unknown): Group | null => {
     return null;
   }
 
-  const members = parseGroupMembers(value.members, value.createdAt);
+  const members = parseGroupMembers(
+    Array.isArray(value.members) ? value.members : value.memberIds,
+    value.createdAt,
+  );
   if (!members) {
     return null;
   }
 
   return {
-    id: value.id,
+    id: normalizedId,
     name: value.name,
     isDefault: value.isDefault,
     createdBy: value.createdBy,
@@ -370,6 +387,47 @@ const mergeSyncedGroup = (localGroup: Group, remoteGroup: Group | null): Group =
     createdAt: Math.min(localGroup.createdAt, remoteGroup.createdAt),
     updatedAt: Math.max(localGroup.updatedAt, remoteGroup.updatedAt),
   };
+};
+
+const mergeGroupsById = (
+  localGroups: ReadonlyArray<Group>,
+  remoteGroups: ReadonlyArray<Group>,
+): Group[] => {
+  const merged = new Map<string, Group>();
+
+  for (const localGroup of localGroups) {
+    const groupId = localGroup.id.trim();
+    if (!groupId) {
+      continue;
+    }
+
+    merged.set(groupId, {
+      ...localGroup,
+      id: groupId,
+      members: mergeGroupMembers(localGroup.members),
+    });
+  }
+
+  for (const remoteGroup of remoteGroups) {
+    const groupId = remoteGroup.id.trim();
+    if (!groupId) {
+      continue;
+    }
+
+    const existing = merged.get(groupId);
+    if (!existing) {
+      merged.set(groupId, {
+        ...remoteGroup,
+        id: groupId,
+        members: mergeGroupMembers(remoteGroup.members),
+      });
+      continue;
+    }
+
+    merged.set(groupId, mergeSyncedGroup(existing, remoteGroup));
+  }
+
+  return Array.from(merged.values()).sort((left, right) => left.createdAt - right.createdAt);
 };
 
 const normalizeFirebaseConfig = (config: FirebaseRuntimeConfigInput): FirebaseOptions | null => {
@@ -466,6 +524,7 @@ class FirebaseService {
   private readonly envConfig: FirebaseOptions | null;
   private runtimeConfig: FirebaseOptions | null = null;
   private hasLoadedRuntimeConfig = false;
+  private cloudSyncEnabled: boolean | null = null;
   private app: FirebaseApp | null = null;
   private auth: Auth | null = null;
   private db: Firestore | null = null;
@@ -486,7 +545,8 @@ class FirebaseService {
 
   private async isConfigured(): Promise<boolean> {
     await this.loadRuntimeConfig();
-    return this.getResolvedConfig() !== null;
+    const isCloudSyncEnabled = await this.isCloudSyncEnabled();
+    return isCloudSyncEnabled && this.getResolvedConfig() !== null;
   }
 
   private async loadRuntimeConfig(): Promise<void> {
@@ -497,6 +557,48 @@ class FirebaseService {
     const raw = await AsyncStorage.getItem(FIREBASE_CONFIG_STORAGE_KEY);
     this.runtimeConfig = raw ? parseStoredFirebaseConfig(raw) : null;
     this.hasLoadedRuntimeConfig = true;
+  }
+
+  private async loadCloudSyncEnabled(): Promise<void> {
+    if (this.cloudSyncEnabled !== null) {
+      return;
+    }
+
+    const raw = await AsyncStorage.getItem(FIREBASE_ENABLED_STORAGE_KEY);
+    if (raw === null) {
+      this.cloudSyncEnabled = false;
+      return;
+    }
+
+    const normalized = raw.trim().toLowerCase();
+    this.cloudSyncEnabled = normalized === '1' || normalized === 'true';
+  }
+
+  private async getNotReadyMessage(): Promise<string> {
+    await this.loadRuntimeConfig();
+    const isCloudSyncEnabled = await this.isCloudSyncEnabled();
+    if (!isCloudSyncEnabled) {
+      return 'Cloud sync is disabled in settings.';
+    }
+
+    return 'Firebase sync is not configured.';
+  }
+
+  async isCloudSyncEnabled(): Promise<boolean> {
+    await this.loadCloudSyncEnabled();
+    return this.cloudSyncEnabled === true;
+  }
+
+  async setCloudSyncEnabled(enabled: boolean): Promise<void> {
+    await AsyncStorage.setItem(FIREBASE_ENABLED_STORAGE_KEY, enabled ? '1' : '0');
+    this.cloudSyncEnabled = enabled;
+
+    if (!enabled) {
+      this.app = null;
+      this.auth = null;
+      this.db = null;
+      this.signInPromise = null;
+    }
   }
 
   async getRuntimeConfigInput(): Promise<FirebaseRuntimeConfigInput | null> {
@@ -588,9 +690,10 @@ class FirebaseService {
     transactions: ReadonlyArray<Transaction>,
   ): Promise<FirebaseSyncResult> {
     if (!(await this.isConfigured())) {
+      const message = await this.getNotReadyMessage();
       return {
         success: false,
-        message: 'Firebase sync is not configured.',
+        message,
         syncedCount: 0,
       };
     }
@@ -627,9 +730,7 @@ class FirebaseService {
       throw new Error('Firebase database not initialized.');
     }
 
-    const uniqueGroupIds = Array.from(
-      new Set(groupIds.map((entry) => entry.trim()).filter((entry) => entry.length > 0)),
-    );
+    const uniqueGroupIds = normalizeGroupIds(groupIds);
 
     const pulled: Transaction[] = [];
     const chunks = chunkArray(uniqueGroupIds, 10);
@@ -672,7 +773,45 @@ class FirebaseService {
       return null;
     }
 
-    return parseGroup(snapshot.data());
+    return parseGroup(snapshot.data(), snapshot.id);
+  }
+
+  async pullGroupsForMember(userId: string): Promise<ReadonlyArray<Group>> {
+    const normalizedUserId = userId.trim();
+    if (!(await this.isConfigured()) || !normalizedUserId) {
+      return [];
+    }
+
+    await this.ensureSignedIn();
+    if (!this.db) {
+      throw new Error('Firebase database not initialized.');
+    }
+
+    const groupsCollection = collection(this.db, FIREBASE_GROUP_COLLECTION);
+    const [memberSnapshot, creatorSnapshot] = await Promise.all([
+      getDocs(
+        query(
+          groupsCollection,
+          where('memberIds', 'array-contains', normalizedUserId),
+        ),
+      ),
+      getDocs(
+        query(
+          groupsCollection,
+          where('createdBy', '==', normalizedUserId),
+        ),
+      ),
+    ]);
+
+    const discoveredGroups: Group[] = [];
+    for (const snapshot of [...memberSnapshot.docs, ...creatorSnapshot.docs]) {
+      const parsed = parseGroup(snapshot.data(), snapshot.id);
+      if (parsed) {
+        discoveredGroups.push(parsed);
+      }
+    }
+
+    return mergeGroupsById([], discoveredGroups);
   }
 
   async pullTombstones(groupIds: ReadonlyArray<string>): Promise<ReadonlyArray<TransactionTombstone>> {
@@ -685,9 +824,7 @@ class FirebaseService {
       throw new Error('Firebase database not initialized.');
     }
 
-    const uniqueGroupIds = Array.from(
-      new Set(groupIds.map((entry) => entry.trim()).filter((entry) => entry.length > 0)),
-    );
+    const uniqueGroupIds = normalizeGroupIds(groupIds);
 
     const pulled: TransactionTombstone[] = [];
     const chunks = chunkArray(uniqueGroupIds, 10);
@@ -823,28 +960,48 @@ class FirebaseService {
     currentUserId = '',
     currentUserAcquisitions: ReadonlyArray<CurrencyAcquisition> = [],
   ): Promise<FirebaseSyncMergeResult> {
+    const requestedGroupIds = normalizeGroupIds(groupIds);
+    const requestedGroupFilter = new Set(requestedGroupIds);
+    const normalizedCurrentUserId = currentUserId.trim();
+    const scopedLocalGroups = localGroups.filter((group) => requestedGroupFilter.has(group.id));
+
     if (!(await this.isConfigured())) {
+      const message = await this.getNotReadyMessage();
       const deduped = mergeTransactions([], localTransactions).merged;
       return {
         success: false,
-        message: 'Firebase sync is not configured.',
+        message,
         syncedCount: 0,
         merged: deduped,
         added: 0,
         updated: 0,
         skipped: 0,
         pulledCount: 0,
+        pulledTombstoneCount: 0,
         pushedCount: 0,
-        participantProfiles: buildProfileNamesFromGroups(localGroups),
+        scopeGroupCount: requestedGroupIds.length,
+        participantProfiles: buildProfileNamesFromGroups(scopedLocalGroups),
+        syncedGroups: scopedLocalGroups,
+        noOpReason: message,
         tombstones: mergeTransactionTombstones([], localTombstones),
-        acquisitionsByUser: currentUserId
-          ? { [currentUserId]: [...currentUserAcquisitions] }
+        acquisitionsByUser: normalizedCurrentUserId
+          ? { [normalizedCurrentUserId]: [...currentUserAcquisitions] }
           : {},
       };
     }
 
-    const remoteTransactions = await this.pullTransactions(groupIds);
-    const remoteTombstones = await this.pullTombstones(groupIds);
+    const discoveredGroups = normalizedCurrentUserId
+      ? await this.pullGroupsForMember(normalizedCurrentUserId)
+      : [];
+    const mergedGroups = mergeGroupsById(localGroups, discoveredGroups);
+    const effectiveGroupIds = normalizeGroupIds([
+      ...requestedGroupIds,
+      ...discoveredGroups.map((group) => group.id),
+    ]);
+    const groupFilter = new Set(effectiveGroupIds);
+
+    const remoteTransactions = await this.pullTransactions(effectiveGroupIds);
+    const remoteTombstones = await this.pullTombstones(effectiveGroupIds);
     const mergedResult = mergeTransactions(localTransactions, remoteTransactions);
     const mergedTombstones = mergeTransactionTombstones(
       localTombstones,
@@ -858,7 +1015,6 @@ class FirebaseService {
       mergedResult.merged.map((transaction) => [transaction.syncId, transaction]),
     );
 
-    const groupFilter = new Set(groupIds);
     const pushCandidates = mergedTransactions.filter((transaction) =>
       groupFilter.has(transaction.groupId),
     );
@@ -879,36 +1035,62 @@ class FirebaseService {
       );
     }
 
-    const groupsToSync = localGroups.filter((group) => groupFilter.has(group.id));
+    const groupsToSync = mergedGroups.filter((group) => groupFilter.has(group.id));
     const syncedGroupResults = await Promise.all(
       groupsToSync.map((group) => this.syncGroup(group)),
     );
-    const participantProfiles = buildProfileNamesFromGroups(
-      syncedGroupResults.map((entry) => entry.group),
-    );
+    const syncedGroups = syncedGroupResults.map((entry) => entry.group);
+    const participantProfiles = buildProfileNamesFromGroups(syncedGroups);
     const acquisitionUserIds = Array.from(new Set(
-      groupsToSync.flatMap((group) => group.members.map((member) => member.id)),
+      syncedGroups.flatMap((group) => group.members.map((member) => member.id)),
     ));
-    if (currentUserId.trim()) {
-      acquisitionUserIds.push(currentUserId.trim());
-      await this.pushUserAcquisitions(currentUserId, currentUserAcquisitions);
+    if (normalizedCurrentUserId) {
+      acquisitionUserIds.push(normalizedCurrentUserId);
+      await this.pushUserAcquisitions(normalizedCurrentUserId, currentUserAcquisitions);
     }
     const acquisitionsByUser = await this.pullUserAcquisitions(acquisitionUserIds);
-    if (currentUserId.trim() && !acquisitionsByUser[currentUserId.trim()]) {
-      acquisitionsByUser[currentUserId.trim()] = currentUserAcquisitions
-        .filter((acquisition) => acquisition.userId === currentUserId.trim())
+    if (normalizedCurrentUserId && !acquisitionsByUser[normalizedCurrentUserId]) {
+      acquisitionsByUser[normalizedCurrentUserId] = currentUserAcquisitions
+        .filter((acquisition) => acquisition.userId === normalizedCurrentUserId)
         .sort((left, right) => right.acquiredAt - left.acquiredAt);
+    }
+
+    let noOpReason: string | null = null;
+    if (effectiveGroupIds.length === 0) {
+      noOpReason = 'No shared cloud groups were found for this user.';
+    } else if (
+      remoteTransactions.length === 0 &&
+      remoteTombstones.length === 0 &&
+      mergedResult.added === 0 &&
+      mergedResult.updated === 0 &&
+      pushResult.syncedCount === 0 &&
+      pushedTombstonesCount === 0
+    ) {
+      noOpReason = 'No new cloud changes were found for the current group scope.';
+    }
+
+    const messageParts = [
+      `Scoped ${effectiveGroupIds.length} group(s).`,
+      `Pulled ${remoteTransactions.length} transaction(s) and ${remoteTombstones.length} deletion(s).`,
+      `Pushed ${pushResult.syncedCount} transaction(s) and ${pushedTombstonesCount} deletion(s).`,
+    ];
+    if (noOpReason) {
+      messageParts.push(noOpReason);
     }
 
     return {
       ...mergedResult,
       merged: mergedTransactions,
       success: true,
-      message: `Synced ${pushResult.syncedCount} transaction(s) and ${pushedTombstonesCount} deletion(s) with cloud.`,
+      message: messageParts.join(' '),
       syncedCount: pushResult.syncedCount + pushedTombstonesCount,
       pulledCount: remoteTransactions.length,
+      pulledTombstoneCount: remoteTombstones.length,
       pushedCount: pushResult.syncedCount + pushedTombstonesCount,
+      scopeGroupCount: effectiveGroupIds.length,
       participantProfiles,
+      syncedGroups,
+      noOpReason,
       tombstones: mergedTombstones,
       acquisitionsByUser,
     };
@@ -916,9 +1098,10 @@ class FirebaseService {
 
   async syncGroup(localGroup: Group): Promise<FirebaseGroupSyncResult> {
     if (!(await this.isConfigured())) {
+      const message = await this.getNotReadyMessage();
       return {
         success: false,
-        message: 'Firebase sync is not configured.',
+        message,
         group: localGroup,
       };
     }
