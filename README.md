@@ -19,14 +19,39 @@ npm install
 ## Run
 
 ```bash
-# Android
+# Android (debug/dev-client build)
 npm run android
 
 # iOS
 npm run ios
 ```
 
-`npm run android` is configured to use Java 17 and the default macOS SDK path (`$HOME/Library/Android/sdk`) automatically.
+`npm run android` installs a debug build and expects Metro to be running.
+
+For USB-free reopening (no Metro dependency), install a release build:
+
+```bash
+# Android release install (bundled JS, no Metro required after install)
+npm run android:release
+```
+
+`npm run android` / `npm run android:release` are configured to use Java 17 and the default macOS SDK path (`$HOME/Library/Android/sdk`) automatically.
+
+### Android debug vs release behavior
+
+- **Debug (`npm run android`)**: requires Metro (`expo start`) and connectivity (USB reverse or same-network LAN).
+- **Release (`npm run android:release`)**: includes bundled JS (`index.android.bundle`) and works without Metro after installation.
+
+If you see:
+
+`Unable to load script. Make sure you're either running Metro ... or that your bundle 'index.android.bundle' is packaged correctly for release.`
+
+it means you launched a debug build without Metro reachable. Fix by either:
+
+1. Running Metro for debug:
+   - `npx expo start --dev-client --lan`
+2. Installing release build:
+   - `npm run android:release`
 
 ## Travel groups, labels, and invites
 
@@ -78,16 +103,23 @@ npm run ios
   - `EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID`
   - `EXPO_PUBLIC_FIREBASE_APP_ID`
 
-## Build Android debug APK (without emulator)
+## Build Android APKs (without emulator)
 
 ```bash
+# Debug APK
 cd android
 JAVA_HOME=/opt/homebrew/opt/openjdk@17 PATH=/opt/homebrew/opt/openjdk@17/bin:$PATH ./gradlew assembleDebug --no-daemon
+
+# Release APK
+cd android
+JAVA_HOME=/opt/homebrew/opt/openjdk@17 PATH=/opt/homebrew/opt/openjdk@17/bin:$PATH ./gradlew assembleRelease --no-daemon
 ```
 
-APK output:
+APK outputs:
 
 `android/app/build/outputs/apk/debug/app-debug.apk`
+
+`android/app/build/outputs/apk/release/app-release.apk`
 
 ## Current native toolchain requirements
 
