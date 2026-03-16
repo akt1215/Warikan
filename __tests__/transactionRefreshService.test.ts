@@ -105,6 +105,33 @@ describe('transactionRefreshService', () => {
     expect(result.transactions[0]?.splits[1]?.amount).toBeCloseTo(37.5, 4);
   });
 
+  test('keeps custom split partial debt when conversion refreshes', () => {
+    const transactions: Transaction[] = [
+      buildTransaction({
+        id: 'tx-custom-partial',
+        syncId: 'sync-custom-partial',
+        originalCurrency: 'EUR',
+        amount: 100,
+        convertedAmount: 40,
+        splitType: 'custom',
+        splits: [{ userId: 'user-2', amount: 10, isPaid: false }],
+      }),
+    ];
+
+    const result = refreshTransactionsForBalance({
+      transactions,
+      baseCurrency: 'USD',
+      acquisitions: [],
+      getMarketRate: (_baseCurrency, foreignCurrency) =>
+        foreignCurrency === 'EUR' ? 2 : null,
+    });
+
+    expect(result.dedupedCount).toBe(0);
+    expect(result.recalculatedCount).toBe(1);
+    expect(result.transactions[0]?.convertedAmount).toBeCloseTo(50, 4);
+    expect(result.transactions[0]?.splits[0]?.amount).toBeCloseTo(12.5, 4);
+  });
+
   test('recalculates with average acquisition rate even without duplicates', () => {
     const transactions: Transaction[] = [
       buildTransaction({

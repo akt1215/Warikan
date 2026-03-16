@@ -1,11 +1,13 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { borderRadius, colors, spacing, typography } from '../../constants';
+import { borderRadius, colors, isSupportedCurrency, spacing, typography } from '../../constants';
+import { CurrencyFlag } from './CurrencyFlag';
 
 export interface PickerOption {
   label: string;
   value: string;
+  flagCurrency?: string;
 }
 
 interface PickerProps {
@@ -27,6 +29,10 @@ export const Picker = ({
       <View style={styles.optionContainer}>
         {options.map((option) => {
           const selected = option.value === selectedValue;
+          const flagCurrency =
+            option.flagCurrency && isSupportedCurrency(option.flagCurrency)
+              ? option.flagCurrency
+              : null;
 
           return (
             <Pressable
@@ -34,9 +40,12 @@ export const Picker = ({
               onPress={() => onValueChange(option.value)}
               style={[styles.option, selected && styles.selectedOption]}
             >
-              <Text style={[styles.optionText, selected && styles.selectedOptionText]}>
-                {option.label}
-              </Text>
+              <View style={styles.optionContent}>
+                {flagCurrency ? <CurrencyFlag currency={flagCurrency} /> : null}
+                <Text style={[styles.optionText, selected && styles.selectedOptionText]}>
+                  {option.label}
+                </Text>
+              </View>
             </Pressable>
           );
         })}
@@ -70,6 +79,11 @@ const styles = StyleSheet.create({
   selectedOption: {
     backgroundColor: colors.primary,
     borderColor: colors.primaryLight,
+  },
+  optionContent: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: spacing.xs,
   },
   optionText: {
     color: colors.textPrimary,

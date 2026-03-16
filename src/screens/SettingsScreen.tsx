@@ -4,7 +4,7 @@ import { useNavigation } from '@react-navigation/native';
 import type { NavigationProp } from '@react-navigation/native';
 
 import { Button, Card, Input, Picker, Typography } from '../components/common';
-import { CURRENCY_LABELS, colors, spacing, SUPPORTED_CURRENCIES } from '../constants';
+import { colors, formatCurrencyLabel, spacing, SUPPORTED_CURRENCIES } from '../constants';
 import type { RootStackParamList } from '../navigation/types';
 import { firebaseService } from '../services';
 import { useCurrencyStore, useUserStore } from '../store';
@@ -28,7 +28,8 @@ export const SettingsScreen = (): React.JSX.Element => {
 
   const currencyOptions = useMemo(() => {
     return SUPPORTED_CURRENCIES.map((currency) => ({
-      label: `${currency} - ${CURRENCY_LABELS[currency]}`,
+      label: formatCurrencyLabel(currency),
+      flagCurrency: currency,
       value: currency,
     }));
   }, []);

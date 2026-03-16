@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { Alert, SafeAreaView, StyleSheet, View } from 'react-native';
 
-import { colors, CURRENCY_LABELS, spacing, SUPPORTED_CURRENCIES } from '../constants';
+import { colors, formatCurrencyLabel, spacing, SUPPORTED_CURRENCIES } from '../constants';
 import { Button, Input, Picker, Typography } from '../components/common';
 import { useGroupStore, useUserStore } from '../store';
 
 const currencyOptions = SUPPORTED_CURRENCIES.map((currency) => ({
-  label: `${currency} - ${CURRENCY_LABELS[currency]}`,
+  label: formatCurrencyLabel(currency),
+  flagCurrency: currency,
   value: currency,
 }));
 

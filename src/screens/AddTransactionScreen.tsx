@@ -4,9 +4,9 @@ import { Alert, ScrollView, StyleSheet } from 'react-native';
 import { Button, Typography } from '../components/common';
 import { TransactionForm, type SplitInputItem } from '../components/transaction';
 import {
-  CURRENCY_LABELS,
   colors,
   DEFAULT_TRANSACTION_LABEL,
+  formatCurrencyLabel,
   spacing,
   SUPPORTED_CURRENCIES,
   TRANSACTION_LABELS,
@@ -94,7 +94,8 @@ export const AddTransactionScreen = (): React.JSX.Element => {
 
   const currencyOptions = useMemo(() => {
     const fromSupported = SUPPORTED_CURRENCIES.map((entry) => ({
-      label: `${entry} - ${CURRENCY_LABELS[entry]}`,
+      label: formatCurrencyLabel(entry),
+      flagCurrency: entry,
       value: entry,
     }));
 
@@ -102,7 +103,7 @@ export const AddTransactionScreen = (): React.JSX.Element => {
       .map((entry) => entry.currency)
       .filter((entry, index, all) => all.indexOf(entry) === index)
       .filter((entry) => !SUPPORTED_CURRENCIES.includes(entry as (typeof SUPPORTED_CURRENCIES)[number]))
-      .map((entry) => ({ label: entry, value: entry }));
+      .map((entry) => ({ label: formatCurrencyLabel(entry), value: entry }));
 
     return [...fromSupported, ...fromAcquisitions];
   }, [acquisitions]);
@@ -329,6 +330,27 @@ export const AddTransactionScreen = (): React.JSX.Element => {
         marketRate,
       });
 
+      const customSplits = customSplitValues
+        .filter((entry) => debtors.includes(entry.userId))
+        .map((entry) => ({
+          userId: entry.userId,
+          amount: entry.amount,
+          isPaid: false,
+        }));
+
+      if (splitType === 'custom') {
+        if (customSplits.length !== debtors.length) {
+          Alert.alert('Invalid split', 'Enter a custom split amount for every selected debtor.');
+          return;
+        }
+
+        const customTotal = customSplits.reduce((sum, split) => sum + split.amount, 0);
+        if (customTotal > convertedAmount + 1e-9) {
+          Alert.alert('Invalid split', 'Custom split total cannot exceed the transaction amount.');
+          return;
+        }
+      }
+
       const splits =
         splitType === 'equal'
           ? debtors.map((debtor) => ({
@@ -336,11 +358,7 @@ export const AddTransactionScreen = (): React.JSX.Element => {
               amount: convertedAmount / (debtors.length + 1),
               isPaid: false,
             }))
-          : customSplitValues.map((entry) => ({
-              userId: entry.userId,
-              amount: entry.amount,
-              isPaid: false,
-            }));
+          : customSplits;
 
       if (splits.some((split) => split.amount <= 0)) {
         Alert.alert('Invalid split', 'All split amounts must be greater than zero.');

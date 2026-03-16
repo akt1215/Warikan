@@ -3,7 +3,7 @@ import { Alert, ScrollView, StyleSheet } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 
 import { Button, Input, Picker, Typography } from '../components/common';
-import { CURRENCY_LABELS, colors, spacing, SUPPORTED_CURRENCIES } from '../constants';
+import { colors, formatCurrencyLabel, spacing, SUPPORTED_CURRENCIES } from '../constants';
 import { useCurrencyStore, useUserStore } from '../store';
 
 const toNumber = (value: string): number => {
@@ -23,7 +23,8 @@ export const AddAcquisitionScreen = (): React.JSX.Element => {
 
   const currencyOptions = useMemo(() => {
     return SUPPORTED_CURRENCIES.map((entry) => ({
-      label: `${entry} - ${CURRENCY_LABELS[entry]}`,
+      label: formatCurrencyLabel(entry),
+      flagCurrency: entry,
       value: entry,
     }));
   }, []);

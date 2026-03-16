@@ -43,6 +43,14 @@ const recalculateSplits = (
     0,
   );
 
+  if (transaction.convertedAmount > EPSILON) {
+    const scale = nextConvertedAmount / transaction.convertedAmount;
+    return transaction.splits.map((split) => ({
+      ...split,
+      amount: split.amount * scale,
+    }));
+  }
+
   if (totalPreviousSplitAmount <= 0) {
     const splitAmount = nextConvertedAmount / transaction.splits.length;
     return transaction.splits.map((split) => ({
@@ -51,9 +59,10 @@ const recalculateSplits = (
     }));
   }
 
+  const scale = nextConvertedAmount / totalPreviousSplitAmount;
   return transaction.splits.map((split) => ({
     ...split,
-    amount: (split.amount / totalPreviousSplitAmount) * nextConvertedAmount,
+    amount: split.amount * scale,
   }));
 };
 
