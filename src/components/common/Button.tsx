@@ -3,10 +3,12 @@ import {
   Pressable,
   StyleSheet,
   Text,
+  View,
   type StyleProp,
   type TextStyle,
   type ViewStyle,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 
 import { borderRadius, colors, spacing, typography } from '../../constants';
 
@@ -23,8 +25,8 @@ interface ButtonProps {
 
 const containerStyleByVariant: Record<ButtonVariant, ViewStyle> = {
   primary: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primaryDark,
+    backgroundColor: 'rgba(124, 131, 255, 0.16)',
+    borderColor: colors.buttonGlassHighlight,
   },
   secondary: {
     backgroundColor: colors.surfaceLight,
@@ -35,8 +37,8 @@ const containerStyleByVariant: Record<ButtonVariant, ViewStyle> = {
     borderColor: colors.border,
   },
   danger: {
-    backgroundColor: colors.danger,
-    borderColor: '#DC2626',
+    backgroundColor: 'rgba(248, 113, 113, 0.14)',
+    borderColor: 'rgba(248, 113, 113, 0.42)',
   },
 };
 
@@ -47,6 +49,11 @@ const textColorByVariant: Record<ButtonVariant, string> = {
   danger: colors.white,
 };
 
+const gradientByVariant: Partial<Record<ButtonVariant, readonly [string, string]>> = {
+  primary: [colors.buttonGlassPrimaryStart, colors.buttonGlassPrimaryEnd],
+  danger: [colors.buttonGlassDangerStart, colors.buttonGlassDangerEnd],
+};
+
 export const Button = ({
   title,
   onPress,
@@ -55,6 +62,8 @@ export const Button = ({
   style,
   textStyle,
 }: ButtonProps): React.JSX.Element => {
+  const gradientColors = gradientByVariant[variant];
+
   return (
     <Pressable
       accessibilityRole="button"
@@ -69,15 +78,33 @@ export const Button = ({
         style,
       ]}
     >
-      <Text
-        style={[
-          styles.text,
-          { color: textColorByVariant[variant] },
-          textStyle,
-        ]}
-      >
-        {title}
-      </Text>
+      {gradientColors ? (
+        <>
+          <LinearGradient
+            colors={[gradientColors[0], gradientColors[1]]}
+            end={{ x: 1, y: 1 }}
+            start={{ x: 0, y: 0 }}
+            style={StyleSheet.absoluteFill}
+          />
+          <LinearGradient
+            colors={[colors.buttonGlassHighlight, 'rgba(255, 255, 255, 0)']}
+            end={{ x: 0.8, y: 0.8 }}
+            start={{ x: 0.2, y: 0 }}
+            style={StyleSheet.absoluteFill}
+          />
+        </>
+      ) : null}
+      <View style={styles.content}>
+        <Text
+          style={[
+            styles.text,
+            { color: textColorByVariant[variant] },
+            textStyle,
+          ]}
+        >
+          {title}
+        </Text>
+      </View>
     </Pressable>
   );
 };
@@ -89,8 +116,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     justifyContent: 'center',
     minHeight: 46,
+    overflow: 'hidden',
     paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm + 2,
+    paddingVertical: spacing.sm + 1,
   },
   raisedButton: {
     elevation: 3,
@@ -108,6 +136,11 @@ const styles = StyleSheet.create({
   },
   disabledButton: {
     opacity: 0.55,
+  },
+  content: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 42,
   },
   text: {
     fontSize: typography.sizes.body,

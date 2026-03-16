@@ -1,6 +1,7 @@
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { Platform } from 'react-native';
 import Svg, { Circle, Line, Path, Polyline } from 'react-native-svg';
 
@@ -195,6 +196,15 @@ export const MainTabNavigator = (): React.JSX.Element => {
   return (
     <Tab.Navigator
       initialRouteName="Home"
+      screenListeners={{
+        tabPress: (event) => {
+          if (event.defaultPrevented || Platform.OS === 'web') {
+            return;
+          }
+
+          void Haptics.selectionAsync().catch(() => undefined);
+        },
+      }}
       screenOptions={({ route }) => ({
         headerStyle: {
           backgroundColor: colors.surface,
