@@ -43,7 +43,7 @@ npm run android:release
 This app uses `@expo/vector-icons` for tab icons, so `expo-font` must be installed (managed automatically via `npx expo install expo-font`).
 
 If Android tab icons are missing while labels are visible, reinstall the app after a rebuild (`npm run android:release`). This ensures the latest icon-font changes are applied.
-Warikan now uses platform-specific tab icons: iOS uses Ionicons, while Android uses native symbol glyphs to avoid Android font-icon rendering issues.
+Warikan uses platform-specific tab icons: iOS uses Ionicons and Android uses a built-in SVG renderer for stable sizing/visibility.
 
 ### Android debug vs release behavior
 
