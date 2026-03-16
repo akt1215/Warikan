@@ -22,7 +22,6 @@ export const HistoryScreen = (): React.JSX.Element => {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Typography variant="h3">History</Typography>
       <View style={styles.list}>
         {transactions.length === 0 ? (
           <Typography variant="bodySmall">No transactions yet.</Typography>

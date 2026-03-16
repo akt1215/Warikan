@@ -309,8 +309,6 @@ export const GroupsScreen = (): React.JSX.Element => {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Typography variant="h3">Travel Groups</Typography>
-
       <Card>
         <Typography variant="h4">Create Travel Group</Typography>
         <View style={styles.cardSection}>

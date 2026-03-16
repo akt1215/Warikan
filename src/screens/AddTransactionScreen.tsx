@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Alert, ScrollView, StyleSheet } from 'react-native';
 
-import { Button, Typography } from '../components/common';
+import { Button } from '../components/common';
 import { TransactionForm, type SplitInputItem } from '../components/transaction';
 import {
   colors,
@@ -393,7 +393,6 @@ export const AddTransactionScreen = (): React.JSX.Element => {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Typography variant="h3">Add Transaction</Typography>
       <TransactionForm
         amount={amount}
         currency={currency}

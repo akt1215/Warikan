@@ -133,8 +133,6 @@ export const SettingsScreen = (): React.JSX.Element => {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Typography variant="h3">Settings</Typography>
-
       <Card>
         <Typography variant="h4">Profile</Typography>
         <View style={styles.cardBody}>

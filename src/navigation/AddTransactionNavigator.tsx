@@ -8,12 +8,8 @@ const Stack = createStackNavigator<AddTransactionStackParamList>();
 
 export const AddTransactionNavigator = (): React.JSX.Element => {
   return (
-    <Stack.Navigator>
-      <Stack.Screen
-        component={AddTransactionScreen}
-        name="AddTransactionForm"
-        options={{ title: 'Add Transaction' }}
-      />
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Screen component={AddTransactionScreen} name="AddTransactionForm" />
     </Stack.Navigator>
   );
 };

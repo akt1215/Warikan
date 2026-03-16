@@ -131,8 +131,6 @@ export const SyncScreen = (): React.JSX.Element => {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Typography variant="h3">Sync</Typography>
-
       <Card>
         <Typography variant="h4">QR Sync</Typography>
         <View style={styles.cardBody}>

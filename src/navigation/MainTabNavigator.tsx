@@ -214,6 +214,7 @@ export const MainTabNavigator = (): React.JSX.Element => {
           shadowOpacity: 0,
         },
         headerTintColor: colors.textPrimary,
+        headerTitleAlign: 'center',
         headerTitleStyle: {
           fontSize: typography.sizes.body,
           fontWeight: typography.weights.semibold,
