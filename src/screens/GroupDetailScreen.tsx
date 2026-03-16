@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, View } from 'react-native';
-import { useRoute } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
+import type { NavigationProp } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
 
 import { Button, Typography } from '../components/common';
@@ -10,6 +11,7 @@ import type { RootStackParamList } from '../navigation/types';
 import { useGroupStore, useTransactionStore, useUserStore } from '../store';
 
 export const GroupDetailScreen = (): React.JSX.Element => {
+  const navigation = useNavigation<NavigationProp<RootStackParamList>>();
   const route = useRoute<RouteProp<RootStackParamList, 'GroupDetail'>>();
   const groups = useGroupStore((state) => state.groups);
   const refreshGroupMembers = useGroupStore((state) => state.refreshGroupMembers);
@@ -81,6 +83,9 @@ export const GroupDetailScreen = (): React.JSX.Element => {
             <View key={transaction.id} style={styles.transactionItem}>
               <TransactionCard
                 baseCurrency={user?.baseCurrency ?? 'USD'}
+                onPress={() =>
+                  navigation.navigate('TransactionDetail', { transactionId: transaction.id })
+                }
                 transaction={transaction}
               />
               {user && transaction.createdBy === user.id ? (
@@ -128,14 +133,14 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    gap: spacing.sm,
+    gap: spacing.md,
     padding: spacing.md,
   },
   transactionList: {
-    gap: spacing.sm,
+    gap: spacing.md,
     marginTop: spacing.md,
   },
   transactionItem: {
-    gap: spacing.sm,
+    gap: spacing.md,
   },
 });

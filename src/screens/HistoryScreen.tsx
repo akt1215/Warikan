@@ -1,12 +1,16 @@
 import React, { useEffect } from 'react';
 import { Alert, ScrollView, StyleSheet, View } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import type { NavigationProp } from '@react-navigation/native';
 
 import { TransactionCard } from '../components/transaction';
 import { Button, Typography } from '../components/common';
 import { colors, spacing } from '../constants';
+import type { RootStackParamList } from '../navigation/types';
 import { useTransactionStore, useUserStore } from '../store';
 
 export const HistoryScreen = (): React.JSX.Element => {
+  const navigation = useNavigation<NavigationProp<RootStackParamList>>();
   const transactions = useTransactionStore((state) => state.transactions);
   const loadTransactions = useTransactionStore((state) => state.loadTransactions);
   const deleteTransaction = useTransactionStore((state) => state.deleteTransaction);
@@ -27,6 +31,9 @@ export const HistoryScreen = (): React.JSX.Element => {
             <View key={transaction.id} style={styles.item}>
               <TransactionCard
                 baseCurrency={user?.baseCurrency ?? 'USD'}
+                onPress={() =>
+                  navigation.navigate('TransactionDetail', { transactionId: transaction.id })
+                }
                 transaction={transaction}
               />
               {user && transaction.createdBy === user.id ? (
@@ -74,13 +81,13 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    gap: spacing.md,
+    gap: spacing.lg,
     padding: spacing.md,
   },
   list: {
-    gap: spacing.sm,
+    gap: spacing.md,
   },
   item: {
-    gap: spacing.sm,
+    gap: spacing.md,
   },
 });

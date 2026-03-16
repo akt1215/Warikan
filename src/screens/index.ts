@@ -9,3 +9,4 @@ export * from './OnboardingScreen';
 export * from './QRSyncScreen';
 export * from './SettingsScreen';
 export * from './SyncScreen';
+export * from './TransactionDetailScreen';

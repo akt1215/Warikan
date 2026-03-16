@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Platform } from 'react-native';
 import Svg, { Circle, Line, Path, Polyline } from 'react-native-svg';
 
-import { colors } from '../constants';
+import { colors, spacing, typography } from '../constants';
 import {
   GroupsScreen,
   HistoryScreen,
@@ -198,14 +198,30 @@ export const MainTabNavigator = (): React.JSX.Element => {
       screenOptions={({ route }) => ({
         headerStyle: {
           backgroundColor: colors.surface,
+          borderBottomColor: colors.border,
+          borderBottomWidth: 1,
+          elevation: 0,
+          shadowOpacity: 0,
         },
         headerTintColor: colors.textPrimary,
+        headerTitleStyle: {
+          fontSize: typography.sizes.body,
+          fontWeight: typography.weights.semibold,
+        },
         tabBarStyle: {
           backgroundColor: colors.surface,
           borderTopColor: colors.border,
+          borderTopWidth: 1,
+          height: 64,
+          paddingBottom: spacing.sm,
+          paddingTop: spacing.xs,
         },
         tabBarActiveTintColor: colors.primaryLight,
         tabBarInactiveTintColor: colors.textSecondary,
+        tabBarLabelStyle: {
+          fontSize: typography.sizes.caption,
+          fontWeight: typography.weights.semibold,
+        },
         tabBarIcon: ({ color, size, focused }) => {
           if (Platform.OS === 'android') {
             return renderAndroidTabIcon(route.name, color, size, focused);

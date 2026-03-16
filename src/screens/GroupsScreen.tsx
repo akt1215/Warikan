@@ -467,20 +467,20 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    gap: spacing.md,
+    gap: spacing.lg,
     padding: spacing.md,
   },
   groupList: {
-    gap: spacing.md,
+    gap: spacing.lg,
   },
   groupRow: {
-    gap: spacing.sm,
+    gap: spacing.md,
   },
   groupActions: {
-    gap: spacing.sm,
+    gap: spacing.md,
   },
   cardSection: {
-    gap: spacing.sm,
+    gap: spacing.md,
     marginTop: spacing.md,
   },
   passphraseSection: {

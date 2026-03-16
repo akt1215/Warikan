@@ -36,7 +36,7 @@ export const SplitInput = ({
 
 const styles = StyleSheet.create({
   container: {
-    gap: spacing.sm,
+    gap: spacing.md,
   },
 });
 

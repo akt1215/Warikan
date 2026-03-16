@@ -17,6 +17,7 @@ export type RootStackParamList = {
   Onboarding: undefined;
   Main: NavigatorScreenParams<MainTabParamList>;
   GroupDetail: { groupId: string };
+  TransactionDetail: { transactionId: string };
   CurrencyWallet: undefined;
   AddAcquisition: undefined;
   QRSync: undefined;

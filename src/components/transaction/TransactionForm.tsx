@@ -161,7 +161,7 @@ export const TransactionForm = ({
 
 const styles = StyleSheet.create({
   container: {
-    gap: spacing.md,
+    gap: spacing.lg,
   },
   splitTypeRow: {
     flexDirection: 'row',

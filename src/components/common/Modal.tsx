@@ -37,15 +37,25 @@ export const Modal = ({
 
 const styles = StyleSheet.create({
   backdrop: {
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: colors.overlay,
     flex: 1,
     justifyContent: 'flex-end',
   },
   sheet: {
     backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderTopWidth: 1,
     borderTopLeftRadius: borderRadius.xl,
     borderTopRightRadius: borderRadius.xl,
+    elevation: 8,
     padding: spacing.lg,
+    shadowColor: colors.black,
+    shadowOffset: {
+      width: 0,
+      height: -3,
+    },
+    shadowOpacity: 0.24,
+    shadowRadius: 10,
   },
   title: {
     color: colors.textPrimary,

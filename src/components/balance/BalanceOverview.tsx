@@ -1,7 +1,7 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
-import { colors, spacing, typography } from '../../constants';
+import { borderRadius, colors, spacing, typography } from '../../constants';
 import { formatCurrency } from '../../utils';
 import { Button, Card } from '../common';
 import { PersonBalance } from './PersonBalance';
@@ -38,13 +38,13 @@ export const BalanceOverview = ({
         ) : null}
       </View>
       <View style={styles.summaryRow}>
-        <View>
+        <View style={styles.summaryTile}>
           <Text style={styles.label}>You owe</Text>
           <Text style={[styles.value, styles.negative]}>
             {formatCurrency(totalOwedByYou, currency)}
           </Text>
         </View>
-        <View>
+        <View style={styles.summaryTile}>
           <Text style={styles.label}>Owed to you</Text>
           <Text style={[styles.value, styles.positive]}>
             {formatCurrency(totalOwedToYou, currency)}
@@ -84,7 +84,15 @@ const styles = StyleSheet.create({
   },
   summaryRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    gap: spacing.sm,
+  },
+  summaryTile: {
+    backgroundColor: colors.surfaceLight,
+    borderColor: colors.border,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    flex: 1,
+    padding: spacing.sm,
   },
   label: {
     color: colors.textSecondary,

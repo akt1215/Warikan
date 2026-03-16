@@ -30,9 +30,11 @@ export const PersonBalance = ({
 const styles = StyleSheet.create({
   row: {
     alignItems: 'center',
+    borderBottomColor: colors.border,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: spacing.sm,
+    paddingVertical: spacing.sm,
   },
   person: {
     color: colors.textPrimary,
@@ -42,6 +44,7 @@ const styles = StyleSheet.create({
   amount: {
     fontSize: typography.sizes.bodySmall,
     fontWeight: typography.weights.semibold,
+    marginLeft: spacing.sm,
   },
   positive: {
     color: colors.successLight,

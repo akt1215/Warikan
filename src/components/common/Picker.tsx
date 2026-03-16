@@ -38,7 +38,11 @@ export const Picker = ({
             <Pressable
               key={option.value}
               onPress={() => onValueChange(option.value)}
-              style={[styles.option, selected && styles.selectedOption]}
+              style={({ pressed }) => [
+                styles.option,
+                selected && styles.selectedOption,
+                pressed && styles.pressedOption,
+              ]}
             >
               <View style={styles.optionContent}>
                 {flagCurrency ? <CurrencyFlag currency={flagCurrency} /> : null}
@@ -69,16 +73,22 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   option: {
-    backgroundColor: colors.surfaceLight,
+    alignItems: 'center',
+    backgroundColor: colors.surface,
     borderColor: colors.border,
     borderRadius: borderRadius.full,
     borderWidth: 1,
+    minHeight: 40,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
   },
   selectedOption: {
     backgroundColor: colors.primary,
-    borderColor: colors.primaryLight,
+    borderColor: colors.primaryDark,
+  },
+  pressedOption: {
+    opacity: 0.9,
+    transform: [{ scale: 0.985 }],
   },
   optionContent: {
     alignItems: 'center',
@@ -88,7 +98,7 @@ const styles = StyleSheet.create({
   optionText: {
     color: colors.textPrimary,
     fontSize: typography.sizes.bodySmall,
-    fontWeight: typography.weights.medium,
+    fontWeight: typography.weights.semibold,
   },
   selectedOptionText: {
     color: colors.white,

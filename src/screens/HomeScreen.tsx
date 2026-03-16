@@ -1,16 +1,20 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, View } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import type { NavigationProp } from '@react-navigation/native';
 
 import { BalanceOverview } from '../components/balance';
 import { Card, Typography } from '../components/common';
 import { TransactionCard } from '../components/transaction';
 import { colors, spacing } from '../constants';
 import { useBalance } from '../hooks';
+import type { RootStackParamList } from '../navigation/types';
 import { firebaseService, refreshTransactionsForBalance } from '../services';
 import { useCurrencyStore, useGroupStore, useTransactionStore, useUserStore } from '../store';
 import { isTravelGroup } from '../utils';
 
 export const HomeScreen = (): React.JSX.Element => {
+  const navigation = useNavigation<NavigationProp<RootStackParamList>>();
   const user = useUserStore((state) => state.user);
   const transactions = useTransactionStore((state) => state.transactions);
   const loadTransactions = useTransactionStore((state) => state.loadTransactions);
@@ -181,6 +185,9 @@ export const HomeScreen = (): React.JSX.Element => {
               <TransactionCard
                 baseCurrency={user?.baseCurrency ?? 'USD'}
                 key={transaction.id}
+                onPress={() =>
+                  navigation.navigate('TransactionDetail', { transactionId: transaction.id })
+                }
                 transaction={transaction}
               />
             ))
@@ -197,11 +204,11 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    gap: spacing.md,
+    gap: spacing.lg,
     padding: spacing.md,
   },
   list: {
-    gap: spacing.sm,
+    gap: spacing.md,
     marginTop: spacing.md,
   },
 });

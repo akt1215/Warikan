@@ -21,11 +21,30 @@ interface ButtonProps {
   textStyle?: StyleProp<TextStyle>;
 }
 
-const backgroundByVariant: Record<ButtonVariant, string> = {
-  primary: colors.primary,
-  secondary: colors.surfaceLight,
-  ghost: colors.transparent,
-  danger: colors.danger,
+const containerStyleByVariant: Record<ButtonVariant, ViewStyle> = {
+  primary: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primaryDark,
+  },
+  secondary: {
+    backgroundColor: colors.surfaceLight,
+    borderColor: colors.border,
+  },
+  ghost: {
+    backgroundColor: colors.transparent,
+    borderColor: colors.border,
+  },
+  danger: {
+    backgroundColor: colors.danger,
+    borderColor: '#DC2626',
+  },
+};
+
+const textColorByVariant: Record<ButtonVariant, string> = {
+  primary: colors.white,
+  secondary: colors.textPrimary,
+  ghost: colors.textPrimary,
+  danger: colors.white,
 };
 
 export const Button = ({
@@ -43,19 +62,17 @@ export const Button = ({
       onPress={onPress}
       style={({ pressed }) => [
         styles.button,
-        {
-          backgroundColor: backgroundByVariant[variant],
-          opacity: disabled ? 0.5 : pressed ? 0.8 : 1,
-          transform: [{ scale: pressed ? 0.98 : 1 }],
-        },
-        variant === 'ghost' && styles.ghostButton,
+        containerStyleByVariant[variant],
+        (variant === 'primary' || variant === 'danger') && styles.raisedButton,
+        pressed && !disabled && styles.pressedButton,
+        disabled && styles.disabledButton,
         style,
       ]}
     >
       <Text
         style={[
           styles.text,
-          variant === 'ghost' && styles.ghostText,
+          { color: textColorByVariant[variant] },
           textStyle,
         ]}
       >
@@ -68,23 +85,34 @@ export const Button = ({
 const styles = StyleSheet.create({
   button: {
     alignItems: 'center',
-    borderRadius: borderRadius.lg,
-    justifyContent: 'center',
-    minHeight: 44,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-  },
-  ghostButton: {
-    borderColor: colors.border,
+    borderRadius: borderRadius.xl,
     borderWidth: 1,
+    justifyContent: 'center',
+    minHeight: 46,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm + 2,
+  },
+  raisedButton: {
+    elevation: 3,
+    shadowColor: colors.black,
+    shadowOffset: {
+      width: 0,
+      height: 3,
+    },
+    shadowOpacity: 0.22,
+    shadowRadius: 6,
+  },
+  pressedButton: {
+    opacity: 0.92,
+    transform: [{ scale: 0.985 }],
+  },
+  disabledButton: {
+    opacity: 0.55,
   },
   text: {
-    color: colors.white,
     fontSize: typography.sizes.body,
     fontWeight: typography.weights.semibold,
-  },
-  ghostText: {
-    color: colors.textPrimary,
+    letterSpacing: 0.2,
   },
 });
 

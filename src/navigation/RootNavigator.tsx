@@ -13,6 +13,7 @@ import {
   GroupDetailScreen,
   OnboardingScreen,
   QRSyncScreen,
+  TransactionDetailScreen,
 } from '../screens';
 import { useUserStore } from '../store';
 import { MainTabNavigator } from './MainTabNavigator';
@@ -71,6 +72,11 @@ export const RootNavigator = (): React.JSX.Element => {
           component={AddAcquisitionScreen}
           name="AddAcquisition"
           options={{ title: 'Add Acquisition' }}
+        />
+        <Stack.Screen
+          component={TransactionDetailScreen}
+          name="TransactionDetail"
+          options={{ title: 'Transaction Detail' }}
         />
         <Stack.Screen component={QRSyncScreen} name="QRSync" options={{ title: 'QR Sync' }} />
       </Stack.Navigator>

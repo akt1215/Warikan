@@ -89,7 +89,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    gap: spacing.md,
+    gap: spacing.lg,
     padding: spacing.md,
   },
 });

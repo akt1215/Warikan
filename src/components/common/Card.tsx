@@ -18,7 +18,15 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     borderRadius: borderRadius.xl,
     borderWidth: 1,
+    elevation: 2,
     padding: spacing.md,
+    shadowColor: colors.black,
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
   },
 });
 

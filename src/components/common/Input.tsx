@@ -1,8 +1,10 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
+  NativeSyntheticEvent,
   StyleSheet,
   Text,
   TextInput,
+  TextInputFocusEventData,
   type StyleProp,
   type TextInputProps,
   type ViewStyle,
@@ -22,14 +24,30 @@ export const Input = ({
   error,
   containerStyle,
   style,
+  onBlur,
+  onFocus,
   ...textInputProps
 }: InputProps): React.JSX.Element => {
+  const [isFocused, setIsFocused] = useState(false);
+
+  const handleFocus = (event: NativeSyntheticEvent<TextInputFocusEventData>): void => {
+    setIsFocused(true);
+    onFocus?.(event);
+  };
+
+  const handleBlur = (event: NativeSyntheticEvent<TextInputFocusEventData>): void => {
+    setIsFocused(false);
+    onBlur?.(event);
+  };
+
   return (
     <View style={[styles.container, containerStyle]}>
       {label ? <Text style={styles.label}>{label}</Text> : null}
       <TextInput
+        onBlur={handleBlur}
+        onFocus={handleFocus}
         placeholderTextColor={colors.textTertiary}
-        style={[styles.input, style]}
+        style={[styles.input, isFocused && styles.focusedInput, style]}
         {...textInputProps}
       />
       {error ? <Text style={styles.error}>{error}</Text> : null}
@@ -47,15 +65,22 @@ const styles = StyleSheet.create({
     fontWeight: typography.weights.medium,
   },
   input: {
-    backgroundColor: colors.surfaceLight,
+    backgroundColor: colors.surface,
     borderColor: colors.border,
-    borderRadius: borderRadius.md,
+    borderRadius: borderRadius.lg,
     borderWidth: 1,
     color: colors.textPrimary,
     fontSize: typography.sizes.body,
-    minHeight: 44,
+    minHeight: 46,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
+  },
+  focusedInput: {
+    borderColor: colors.primary,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
   },
   error: {
     color: colors.dangerLight,
