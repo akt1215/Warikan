@@ -8,7 +8,6 @@ import { createStackNavigator } from '@react-navigation/stack';
 
 import { colors } from '../constants';
 import {
-  AddAcquisitionScreen,
   CurrencyWalletScreen,
   EditTransactionScreen,
   GroupDetailScreen,
@@ -68,11 +67,6 @@ export const RootNavigator = (): React.JSX.Element => {
           component={CurrencyWalletScreen}
           name="CurrencyWallet"
           options={{ title: 'My Currencies' }}
-        />
-        <Stack.Screen
-          component={AddAcquisitionScreen}
-          name="AddAcquisition"
-          options={{ title: 'Add Acquisition' }}
         />
         <Stack.Screen
           component={TransactionDetailScreen}

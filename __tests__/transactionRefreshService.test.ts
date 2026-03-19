@@ -1,24 +1,32 @@
 import type { CurrencyAcquisition, Transaction } from '../src/types';
 import { refreshTransactionsForBalance } from '../src/services/transactionRefreshService';
 
-const buildTransaction = (overrides: Partial<Transaction>): Transaction => ({
-  id: 'tx-default',
-  groupId: 'group-1',
-  label: 'Trip',
-  payerId: 'user-1',
-  amount: 1000,
-  originalCurrency: 'JPY',
-  fee: 0,
-  convertedAmount: 10,
-  note: 'Lunch',
-  splitType: 'equal',
-  splits: [{ userId: 'user-2', amount: 10, isPaid: false }],
-  createdBy: 'user-1',
-  createdAt: 10,
-  updatedAt: 10,
-  syncId: 'sync-default',
-  ...overrides,
-});
+const buildTransaction = (overrides: Partial<Transaction>): Transaction => {
+  const base: Transaction = {
+    id: 'tx-default',
+    groupId: 'group-1',
+    label: 'Trip',
+    payerId: 'user-1',
+    amount: 1000,
+    originalCurrency: 'JPY',
+    fee: 0,
+    convertedAmount: 10,
+    note: 'Lunch',
+    splitType: 'equal',
+    splits: [{ userId: 'user-2', amount: 10, isPaid: false }],
+    createdBy: 'user-1',
+    occurredAt: 10,
+    createdAt: 10,
+    updatedAt: 10,
+    syncId: 'sync-default',
+  };
+
+  const merged = { ...base, ...overrides };
+  return {
+    ...merged,
+    occurredAt: overrides.occurredAt ?? overrides.createdAt ?? base.occurredAt,
+  };
+};
 
 describe('transactionRefreshService', () => {
   test('deduplicates by syncId and recalculates converted amount', () => {

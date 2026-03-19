@@ -17,6 +17,9 @@ export const SettingsScreen = (): React.JSX.Element => {
 
   const [name, setName] = useState(user?.name ?? '');
   const [baseCurrency, setBaseCurrency] = useState(user?.baseCurrency ?? 'USD');
+  const [favoriteCurrencies, setFavoriteCurrencies] = useState<string[]>(
+    user?.favoriteCurrencies ?? [],
+  );
   const [firebaseApiKey, setFirebaseApiKey] = useState('');
   const [firebaseAuthDomain, setFirebaseAuthDomain] = useState('');
   const [firebaseProjectId, setFirebaseProjectId] = useState('');
@@ -47,10 +50,15 @@ export const SettingsScreen = (): React.JSX.Element => {
     await updateProfile({
       name,
       baseCurrency,
+      favoriteCurrencies,
     });
 
     Alert.alert('Saved', 'Profile updated.');
   };
+
+  useEffect(() => {
+    setFavoriteCurrencies(user?.favoriteCurrencies ?? []);
+  }, [user?.favoriteCurrencies]);
 
   useEffect(() => {
     void (async () => {
@@ -77,6 +85,16 @@ export const SettingsScreen = (): React.JSX.Element => {
       }
     })();
   }, []);
+
+  const toggleFavoriteCurrency = (currency: string): void => {
+    setFavoriteCurrencies((previous) => {
+      if (previous.includes(currency)) {
+        return previous.filter((entry) => entry !== currency);
+      }
+
+      return [...previous, currency];
+    });
+  };
 
   const toggleCloudSync = async (): Promise<void> => {
     if (isCloudToggleLoading) {
@@ -143,6 +161,23 @@ export const SettingsScreen = (): React.JSX.Element => {
             options={currencyOptions}
             selectedValue={baseCurrency}
           />
+          <Typography variant="bodySmall">Favorite currencies</Typography>
+          <Typography variant="caption">
+            These currencies are shown first when adding a payment.
+          </Typography>
+          <View style={styles.favoriteGrid}>
+            {SUPPORTED_CURRENCIES.map((currency) => {
+              const selected = favoriteCurrencies.includes(currency);
+              return (
+                <Button
+                  key={currency}
+                  onPress={() => toggleFavoriteCurrency(currency)}
+                  title={selected ? `✓ ${formatCurrencyLabel(currency)}` : formatCurrencyLabel(currency)}
+                  variant={selected ? 'primary' : 'secondary'}
+                />
+              );
+            })}
+          </View>
           <Button onPress={() => void saveProfile()} title="Save Profile" />
         </View>
       </Card>
@@ -150,6 +185,9 @@ export const SettingsScreen = (): React.JSX.Element => {
       <Card>
         <Typography variant="h4">Currency</Typography>
         <View style={styles.cardBody}>
+          <Typography variant="caption">
+            Market rates are cached for up to 12 hours. Refresh may use cached latest data.
+          </Typography>
           <Button
             onPress={() => {
               navigation.navigate('CurrencyWallet');
@@ -163,7 +201,10 @@ export const SettingsScreen = (): React.JSX.Element => {
                 return;
               }
               void refreshRates(user.baseCurrency);
-              Alert.alert('Updated', 'Exchange rates refreshed.');
+              Alert.alert(
+                'Updated',
+                'Exchange rates refreshed. If updated within 12 hours, this may use cached latest data.',
+              );
             }}
             title="Refresh Market Rates"
             variant="secondary"
@@ -257,5 +298,10 @@ const styles = StyleSheet.create({
   cardBody: {
     gap: spacing.md,
     marginTop: spacing.md,
+  },
+  favoriteGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
   },
 });

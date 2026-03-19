@@ -132,7 +132,7 @@ export const TransactionDetailScreen = (): React.JSX.Element => {
           <View style={styles.detailRow}>
             <Typography variant="caption">Date</Typography>
             <Typography variant="bodySmall">
-              {formatTimestamp(transaction.createdAt, 'PP p')}
+              {formatTimestamp(transaction.occurredAt || transaction.createdAt, 'PP p')}
             </Typography>
           </View>
         </View>

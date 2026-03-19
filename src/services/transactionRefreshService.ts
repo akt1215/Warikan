@@ -1,5 +1,5 @@
 import type { CurrencyAcquisition, Transaction } from '../types';
-import { convertToBaseCurrency } from './currencyCalculator';
+import { convertToBaseCurrency, resolveAppliedRate } from './currencyCalculator';
 import { mergeTransactions } from './syncService';
 
 interface RefreshTransactionsInput {
@@ -66,6 +66,41 @@ const recalculateSplits = (
   }));
 };
 
+const hasRelevantAcquisition = (
+  transaction: Transaction,
+  baseCurrency: string,
+  acquisitions: ReadonlyArray<CurrencyAcquisition>,
+): boolean => {
+  if (transaction.originalCurrency === baseCurrency) {
+    return false;
+  }
+
+  return acquisitions.some((acquisition) =>
+    acquisition.currency === transaction.originalCurrency &&
+    acquisition.userId === transaction.payerId &&
+    acquisition.amount > 0 &&
+    acquisition.paidAmount > 0,
+  );
+};
+
+const getMarketRateForRefresh = (
+  transaction: Transaction,
+  baseCurrency: string,
+  acquisitions: ReadonlyArray<CurrencyAcquisition>,
+  marketRate: number | null,
+): number | null => {
+  if (
+    transaction.appliedRateType === 'market' &&
+    typeof transaction.appliedRateValue === 'number' &&
+    transaction.appliedRateValue > 0 &&
+    !hasRelevantAcquisition(transaction, baseCurrency, acquisitions)
+  ) {
+    return transaction.appliedRateValue;
+  }
+
+  return marketRate;
+};
+
 export const refreshTransactionsForBalance = ({
   transactions,
   baseCurrency,
@@ -78,6 +113,20 @@ export const refreshTransactionsForBalance = ({
   let recalculatedCount = 0;
 
   const refreshedTransactions = dedupedTransactions.map((transaction) => {
+    const refreshMarketRate = getMarketRateForRefresh(
+      transaction,
+      baseCurrency,
+      acquisitions,
+      getMarketRate(baseCurrency, transaction.originalCurrency),
+    );
+    const resolvedRate = resolveAppliedRate({
+      fromCurrency: transaction.originalCurrency,
+      baseCurrency,
+      acquisitions,
+      acquisitionOwnerId: transaction.payerId,
+      marketRate: refreshMarketRate,
+    });
+
     const nextConvertedAmount = convertToBaseCurrency({
       amount: transaction.amount,
       fee: transaction.fee,
@@ -85,7 +134,7 @@ export const refreshTransactionsForBalance = ({
       baseCurrency,
       acquisitions,
       acquisitionOwnerId: transaction.payerId,
-      marketRate: getMarketRate(baseCurrency, transaction.originalCurrency),
+      marketRate: refreshMarketRate,
     });
 
     const nextSplits = recalculateSplits(transaction, nextConvertedAmount);
@@ -102,7 +151,12 @@ export const refreshTransactionsForBalance = ({
       );
 
     if (!convertedChanged && !splitsChanged) {
-      return transaction;
+      if (
+        transaction.appliedRateType === resolvedRate?.rateType &&
+        transaction.appliedRateValue === resolvedRate?.rateValue
+      ) {
+        return transaction;
+      }
     }
 
     recalculatedCount += 1;
@@ -110,6 +164,9 @@ export const refreshTransactionsForBalance = ({
       ...transaction,
       convertedAmount: nextConvertedAmount,
       splits: nextSplits,
+      occurredAt: transaction.occurredAt || transaction.createdAt,
+      appliedRateType: resolvedRate?.rateType,
+      appliedRateValue: resolvedRate?.rateValue ?? null,
       updatedAt: recalculationTimestamp,
     };
   });

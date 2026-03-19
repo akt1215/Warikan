@@ -12,24 +12,32 @@ const buildGroup = (overrides: Partial<Group>): Group => ({
   ...overrides,
 });
 
-const buildTransaction = (overrides: Partial<Transaction>): Transaction => ({
-  id: 'tx-1',
-  groupId: 'group-1',
-  label: 'Trip',
-  payerId: 'user-2',
-  amount: 100,
-  originalCurrency: 'USD',
-  fee: 0,
-  convertedAmount: 100,
-  note: 'Lunch',
-  splitType: 'equal',
-  splits: [{ userId: 'user-1', amount: 100, isPaid: false }],
-  createdBy: 'user-2',
-  createdAt: 200,
-  updatedAt: 200,
-  syncId: 'sync-1',
-  ...overrides,
-});
+const buildTransaction = (overrides: Partial<Transaction>): Transaction => {
+  const base: Transaction = {
+    id: 'tx-1',
+    groupId: 'group-1',
+    label: 'Trip',
+    payerId: 'user-2',
+    amount: 100,
+    originalCurrency: 'USD',
+    fee: 0,
+    convertedAmount: 100,
+    note: 'Lunch',
+    splitType: 'equal',
+    splits: [{ userId: 'user-1', amount: 100, isPaid: false }],
+    createdBy: 'user-2',
+    occurredAt: 200,
+    createdAt: 200,
+    updatedAt: 200,
+    syncId: 'sync-1',
+  };
+
+  const merged = { ...base, ...overrides };
+  return {
+    ...merged,
+    occurredAt: overrides.occurredAt ?? overrides.createdAt ?? base.occurredAt,
+  };
+};
 
 describe('groupMemberReconciliationService', () => {
   test('adds missing participants to group members', () => {

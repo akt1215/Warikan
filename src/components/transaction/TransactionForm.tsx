@@ -1,8 +1,8 @@
 import React from 'react';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet, Switch, View } from 'react-native';
 
 import type { SplitType } from '../../types';
-import { spacing } from '../../constants';
+import { colors, spacing } from '../../constants';
 import { Button, Input, Picker, type PickerOption, Typography } from '../common';
 import { SplitInput, type SplitInputItem } from './SplitInput';
 
@@ -32,6 +32,9 @@ interface TransactionFormProps {
   onSplitTypeChange: (value: SplitType) => void;
   customSplitValues: SplitInputItem[];
   onCustomSplitChange: (userId: string, amount: number) => void;
+  showCurrencyVisibilityToggle?: boolean;
+  showAllCurrencies?: boolean;
+  onToggleCurrencyVisibility?: () => void;
 }
 
 export const TransactionForm = ({
@@ -60,6 +63,9 @@ export const TransactionForm = ({
   onSplitTypeChange,
   customSplitValues,
   onCustomSplitChange,
+  showCurrencyVisibilityToggle = false,
+  showAllCurrencies = false,
+  onToggleCurrencyVisibility,
 }: TransactionFormProps): React.JSX.Element => {
   return (
     <View style={styles.container}>
@@ -84,12 +90,31 @@ export const TransactionForm = ({
         value={amount}
       />
 
-      <Picker
-        label="Currency"
-        onValueChange={onCurrencyChange}
-        options={currencyOptions}
-        selectedValue={currency}
-      />
+      <View style={styles.currencySection}>
+        <Picker
+          label="Currency"
+          onValueChange={onCurrencyChange}
+          options={currencyOptions}
+          selectedValue={currency}
+        />
+        {showCurrencyVisibilityToggle && onToggleCurrencyVisibility ? (
+          <View style={styles.currencyVisibilityRow}>
+            <Typography variant="caption">
+              {showAllCurrencies ? 'Showing all currencies' : 'Showing favorites'}
+            </Typography>
+            <View style={styles.currencyVisibilityControl}>
+              <Typography variant="caption">All</Typography>
+              <Switch
+                accessibilityLabel="Show all currencies"
+                onValueChange={onToggleCurrencyVisibility}
+                thumbColor={showAllCurrencies ? colors.primaryLight : colors.textSecondary}
+                trackColor={{ false: colors.border, true: colors.primaryDark }}
+                value={showAllCurrencies}
+              />
+            </View>
+          </View>
+        ) : null}
+      </View>
 
       <Input
         keyboardType="decimal-pad"
@@ -166,6 +191,19 @@ const styles = StyleSheet.create({
   splitTypeRow: {
     flexDirection: 'row',
     gap: spacing.sm,
+  },
+  currencySection: {
+    gap: spacing.xs,
+  },
+  currencyVisibilityRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  currencyVisibilityControl: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: spacing.xs,
   },
   debtorsSection: {
     gap: spacing.xs,

@@ -7,24 +7,32 @@ import {
 } from '../src/services/syncService';
 import type { Group, Transaction } from '../src/types';
 
-const baseTransaction = (overrides: Partial<Transaction>): Transaction => ({
-  id: 'id-default',
-  groupId: 'group-1',
-  label: 'Dinner',
-  payerId: 'payer-1',
-  amount: 100,
-  originalCurrency: 'USD',
-  fee: 0,
-  convertedAmount: 100,
-  note: 'Dinner',
-  splitType: 'equal',
-  splits: [{ userId: 'user-2', amount: 50, isPaid: false }],
-  createdBy: 'payer-1',
-  createdAt: 100,
-  updatedAt: 100,
-  syncId: 'sync-default',
-  ...overrides,
-});
+const baseTransaction = (overrides: Partial<Transaction>): Transaction => {
+  const base: Transaction = {
+    id: 'id-default',
+    groupId: 'group-1',
+    label: 'Dinner',
+    payerId: 'payer-1',
+    amount: 100,
+    originalCurrency: 'USD',
+    fee: 0,
+    convertedAmount: 100,
+    note: 'Dinner',
+    splitType: 'equal',
+    splits: [{ userId: 'user-2', amount: 50, isPaid: false }],
+    createdBy: 'payer-1',
+    occurredAt: 100,
+    createdAt: 100,
+    updatedAt: 100,
+    syncId: 'sync-default',
+  };
+
+  const merged = { ...base, ...overrides };
+  return {
+    ...merged,
+    occurredAt: overrides.occurredAt ?? overrides.createdAt ?? base.occurredAt,
+  };
+};
 
 const baseGroup = (overrides: Partial<Group>): Group => ({
   id: 'group-1',
@@ -128,6 +136,7 @@ describe('syncService', () => {
           splitType: 'equal',
           splits: [{ userId: 'user-2', amount: 50, isPaid: false }],
           createdBy: 'payer-1',
+          occurredAt: 100,
           createdAt: 100,
           updatedAt: 100,
           syncId: 'legacy-sync-1',

@@ -115,10 +115,10 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.xl,
     borderWidth: 1,
     justifyContent: 'center',
-    minHeight: 46,
+    minHeight: 44,
     overflow: 'hidden',
     paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm + 1,
+    paddingVertical: spacing.xs + 2,
   },
   raisedButton: {
     elevation: 3,
@@ -140,7 +140,7 @@ const styles = StyleSheet.create({
   content: {
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 42,
+    minHeight: 32,
   },
   text: {
     fontSize: typography.sizes.body,

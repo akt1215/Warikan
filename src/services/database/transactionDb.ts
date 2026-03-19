@@ -17,9 +17,12 @@ interface TransactionRow {
   splitType: 'equal' | 'custom';
   splits: string;
   createdBy: string;
+  occurredAt: number;
   createdAt: number;
   updatedAt: number;
   syncId: string;
+  appliedRateType: 'acquisition' | 'market' | null;
+  appliedRateValue: number | null;
 }
 
 interface TransactionDeletionRow {
@@ -63,9 +66,13 @@ const toTransaction = (row: TransactionRow): Transaction => ({
   splitType: row.splitType,
   splits: parseSplits(row.splits),
   createdBy: row.createdBy,
+  occurredAt: row.occurredAt || row.createdAt,
   createdAt: row.createdAt,
   updatedAt: row.updatedAt,
   syncId: row.syncId,
+  appliedRateType: row.appliedRateType ?? undefined,
+  appliedRateValue:
+    typeof row.appliedRateValue === 'number' ? row.appliedRateValue : undefined,
 });
 
 const runInsert = async (
@@ -86,9 +93,12 @@ const runInsert = async (
       splitType,
       splits,
       createdBy,
+      occurredAt,
       createdAt,
       updatedAt,
-      syncId
+      syncId,
+      appliedRateType,
+      appliedRateValue
     ) VALUES (
       $id,
       $groupId,
@@ -102,9 +112,12 @@ const runInsert = async (
       $splitType,
       $splits,
       $createdBy,
+      $occurredAt,
       $createdAt,
       $updatedAt,
-      $syncId
+      $syncId,
+      $appliedRateType,
+      $appliedRateValue
     )`,
     {
       $id: transaction.id,
@@ -119,9 +132,12 @@ const runInsert = async (
       $splitType: transaction.splitType,
       $splits: JSON.stringify(transaction.splits),
       $createdBy: transaction.createdBy,
+      $occurredAt: transaction.occurredAt,
       $createdAt: transaction.createdAt,
       $updatedAt: transaction.updatedAt,
       $syncId: transaction.syncId,
+      $appliedRateType: transaction.appliedRateType ?? null,
+      $appliedRateValue: transaction.appliedRateValue ?? null,
     },
   );
 };
@@ -147,9 +163,12 @@ export const upsertTransactionRecord = async (transaction: Transaction): Promise
       splitType,
       splits,
       createdBy,
+      occurredAt,
       createdAt,
       updatedAt,
-      syncId
+      syncId,
+      appliedRateType,
+      appliedRateValue
     ) VALUES (
       $id,
       $groupId,
@@ -163,9 +182,12 @@ export const upsertTransactionRecord = async (transaction: Transaction): Promise
       $splitType,
       $splits,
       $createdBy,
+      $occurredAt,
       $createdAt,
       $updatedAt,
-      $syncId
+      $syncId,
+      $appliedRateType,
+      $appliedRateValue
     )
     ON CONFLICT(id) DO UPDATE SET
       groupId = excluded.groupId,
@@ -179,9 +201,12 @@ export const upsertTransactionRecord = async (transaction: Transaction): Promise
       splitType = excluded.splitType,
       splits = excluded.splits,
       createdBy = excluded.createdBy,
+      occurredAt = excluded.occurredAt,
       createdAt = excluded.createdAt,
       updatedAt = excluded.updatedAt,
-      syncId = excluded.syncId`,
+      syncId = excluded.syncId,
+      appliedRateType = excluded.appliedRateType,
+      appliedRateValue = excluded.appliedRateValue`,
     {
       $id: transaction.id,
       $groupId: transaction.groupId,
@@ -195,9 +220,12 @@ export const upsertTransactionRecord = async (transaction: Transaction): Promise
       $splitType: transaction.splitType,
       $splits: JSON.stringify(transaction.splits),
       $createdBy: transaction.createdBy,
+      $occurredAt: transaction.occurredAt,
       $createdAt: transaction.createdAt,
       $updatedAt: transaction.updatedAt,
       $syncId: transaction.syncId,
+      $appliedRateType: transaction.appliedRateType ?? null,
+      $appliedRateValue: transaction.appliedRateValue ?? null,
     },
   );
 };
@@ -206,7 +234,8 @@ export const getAllTransactions = async (): Promise<Transaction[]> => {
   const database = await getDatabase();
   const rows = await database.getAllAsync<TransactionRow>(
     `SELECT id, groupId, payerId, amount, originalCurrency, fee, convertedAmount, note,
-            label, splitType, splits, createdBy, createdAt, updatedAt, syncId
+            label, splitType, splits, createdBy, occurredAt, createdAt, updatedAt, syncId,
+            appliedRateType, appliedRateValue
      FROM transactions
      ORDER BY createdAt DESC`,
   );
@@ -218,7 +247,8 @@ export const getTransactionsByGroup = async (groupId: string): Promise<Transacti
   const database = await getDatabase();
   const rows = await database.getAllAsync<TransactionRow>(
     `SELECT id, groupId, payerId, amount, originalCurrency, fee, convertedAmount, note,
-            label, splitType, splits, createdBy, createdAt, updatedAt, syncId
+            label, splitType, splits, createdBy, occurredAt, createdAt, updatedAt, syncId,
+            appliedRateType, appliedRateValue
      FROM transactions
      WHERE groupId = $groupId
      ORDER BY createdAt DESC`,
@@ -232,7 +262,8 @@ export const getTransactionsSince = async (timestamp: number): Promise<Transacti
   const database = await getDatabase();
   const rows = await database.getAllAsync<TransactionRow>(
     `SELECT id, groupId, payerId, amount, originalCurrency, fee, convertedAmount, note,
-            label, splitType, splits, createdBy, createdAt, updatedAt, syncId
+            label, splitType, splits, createdBy, occurredAt, createdAt, updatedAt, syncId,
+            appliedRateType, appliedRateValue
      FROM transactions
      WHERE updatedAt > $timestamp
      ORDER BY createdAt DESC`,

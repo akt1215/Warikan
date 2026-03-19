@@ -17,6 +17,11 @@ export interface ConvertCurrencyInput {
   marketRate?: number | null;
 }
 
+export interface AppliedRate {
+  rateType: 'acquisition' | 'market';
+  rateValue: number;
+}
+
 export const getAverageRate = (
   acquisitions: ReadonlyArray<AcquisitionForRate>,
 ): number | null => {
@@ -53,6 +58,44 @@ export const calculateAcquisitionRate = (amount: number, paidAmount: number): nu
   return new Decimal(amount).div(paidAmount).toNumber();
 };
 
+export const resolveAppliedRate = ({
+  fromCurrency,
+  baseCurrency,
+  acquisitions,
+  acquisitionOwnerId,
+  marketRate,
+}: Omit<ConvertCurrencyInput, 'amount' | 'fee'>): AppliedRate | null => {
+  if (fromCurrency === baseCurrency) {
+    return {
+      rateType: 'market',
+      rateValue: 1,
+    };
+  }
+
+  const relevantAcquisitions = acquisitions.filter(
+    (acquisition) =>
+      acquisition.currency === fromCurrency &&
+      (!acquisitionOwnerId || acquisition.userId === acquisitionOwnerId),
+  );
+
+  const averageRate = getAverageRate(relevantAcquisitions);
+  if (averageRate !== null && averageRate > 0) {
+    return {
+      rateType: 'acquisition',
+      rateValue: averageRate,
+    };
+  }
+
+  if (typeof marketRate === 'number' && marketRate > 0) {
+    return {
+      rateType: 'market',
+      rateValue: marketRate,
+    };
+  }
+
+  return null;
+};
+
 export const convertToBaseCurrency = ({
   amount,
   fee = 0,
@@ -64,24 +107,18 @@ export const convertToBaseCurrency = ({
 }: ConvertCurrencyInput): number => {
   const total = new Decimal(amount).plus(fee);
 
-  if (fromCurrency === baseCurrency) {
-    return total.toNumber();
-  }
-
-  const relevantAcquisitions = acquisitions.filter(
-    (acquisition) =>
-      acquisition.currency === fromCurrency &&
-      (!acquisitionOwnerId || acquisition.userId === acquisitionOwnerId),
-  );
-
-  const averageRate = getAverageRate(relevantAcquisitions);
-  const effectiveRate = averageRate ?? marketRate ?? null;
-
-  if (effectiveRate === null || effectiveRate <= 0) {
+  const resolvedRate = resolveAppliedRate({
+    fromCurrency,
+    baseCurrency,
+    acquisitions,
+    acquisitionOwnerId,
+    marketRate,
+  });
+  if (!resolvedRate) {
     throw new Error(
       `No conversion rate available for ${fromCurrency} to ${baseCurrency}.`,
     );
   }
 
-  return total.div(effectiveRate).toNumber();
+  return total.div(resolvedRate.rateValue).toNumber();
 };

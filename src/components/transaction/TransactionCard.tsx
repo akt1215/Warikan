@@ -28,7 +28,9 @@ export const TransactionCard = ({
       </Text>
       <Text style={styles.meta}>Label: {transaction.label}</Text>
       <Text style={styles.meta}>Payer: {transaction.payerId}</Text>
-      <Text style={styles.meta}>{formatTimestamp(transaction.createdAt, 'PP p')}</Text>
+      <Text style={styles.meta}>
+        {formatTimestamp(transaction.occurredAt || transaction.createdAt, 'PP p')}
+      </Text>
     </Card>
   );
 

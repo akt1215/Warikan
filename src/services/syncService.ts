@@ -241,7 +241,7 @@ const normalizeGroups = (value: unknown): Group[] => {
   return Array.from(groupsById.values()).sort((left, right) => left.createdAt - right.createdAt);
 };
 
-const applyDefaultTransactionLabel = (value: unknown): unknown => {
+const normalizeTransactionPayloadEntries = (value: unknown): unknown => {
   if (!Array.isArray(value)) {
     return value;
   }
@@ -251,13 +251,35 @@ const applyDefaultTransactionLabel = (value: unknown): unknown => {
       return item;
     }
 
+    const occurredAt = typeof item.occurredAt === 'number'
+      ? item.occurredAt
+      : typeof item.createdAt === 'number'
+        ? item.createdAt
+        : undefined;
+
+    const appliedRateType = item.appliedRateType === 'acquisition' || item.appliedRateType === 'market'
+      ? item.appliedRateType
+      : undefined;
+
+    const appliedRateValue = typeof item.appliedRateValue === 'number' || item.appliedRateValue === null
+      ? item.appliedRateValue
+      : undefined;
+
     if (typeof item.label === 'string' && item.label.trim()) {
-      return item;
+      return {
+        ...item,
+        ...(occurredAt === undefined ? {} : { occurredAt }),
+        ...(appliedRateType === undefined ? {} : { appliedRateType }),
+        ...(appliedRateValue === undefined ? {} : { appliedRateValue }),
+      };
     }
 
     return {
       ...item,
       label: DEFAULT_TRANSACTION_LABEL,
+      ...(occurredAt === undefined ? {} : { occurredAt }),
+      ...(appliedRateType === undefined ? {} : { appliedRateType }),
+      ...(appliedRateValue === undefined ? {} : { appliedRateValue }),
     };
   });
 };
@@ -285,9 +307,20 @@ const isValidTransactionArray = (value: unknown): value is Transaction[] => {
       (item.splitType === 'equal' || item.splitType === 'custom') &&
       Array.isArray(item.splits) &&
       typeof item.createdBy === 'string' &&
+      typeof item.occurredAt === 'number' &&
       typeof item.createdAt === 'number' &&
       typeof item.updatedAt === 'number' &&
-      typeof item.syncId === 'string'
+      typeof item.syncId === 'string' &&
+      (
+        item.appliedRateType === undefined ||
+        item.appliedRateType === 'acquisition' ||
+        item.appliedRateType === 'market'
+      ) &&
+      (
+        item.appliedRateValue === undefined ||
+        item.appliedRateValue === null ||
+        typeof item.appliedRateValue === 'number'
+      )
     );
   });
 };
@@ -337,7 +370,7 @@ export const parseSyncPayload = (rawPayload: string): SyncPayload => {
     throw new Error('Invalid payload metadata.');
   }
 
-  const normalizedTransactions = applyDefaultTransactionLabel(parsed.transactions);
+  const normalizedTransactions = normalizeTransactionPayloadEntries(parsed.transactions);
 
   if (!isValidTransactionArray(normalizedTransactions)) {
     throw new Error('Invalid transaction data in payload.');

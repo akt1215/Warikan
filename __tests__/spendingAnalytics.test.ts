@@ -1,24 +1,32 @@
 import { aggregateUsageByPerson, getTotalSpending } from '../src/utils/spendingAnalytics';
 import type { Transaction } from '../src/types';
 
-const baseTransaction = (overrides: Partial<Transaction>): Transaction => ({
-  id: 'transaction-default',
-  groupId: 'group-1',
-  label: 'Miscellaneous',
-  payerId: 'payer-1',
-  amount: 100,
-  originalCurrency: 'USD',
-  fee: 0,
-  convertedAmount: 100,
-  note: 'Expense',
-  splitType: 'equal',
-  splits: [{ userId: 'user-2', amount: 50, isPaid: false }],
-  createdBy: 'payer-1',
-  createdAt: Date.UTC(2026, 4, 5),
-  updatedAt: Date.UTC(2026, 4, 5),
-  syncId: 'sync-default',
-  ...overrides,
-});
+const baseTransaction = (overrides: Partial<Transaction>): Transaction => {
+  const base: Transaction = {
+    id: 'transaction-default',
+    groupId: 'group-1',
+    label: 'Miscellaneous',
+    payerId: 'payer-1',
+    amount: 100,
+    originalCurrency: 'USD',
+    fee: 0,
+    convertedAmount: 100,
+    note: 'Expense',
+    splitType: 'equal',
+    splits: [{ userId: 'user-2', amount: 50, isPaid: false }],
+    createdBy: 'payer-1',
+    occurredAt: Date.UTC(2026, 4, 5),
+    createdAt: Date.UTC(2026, 4, 5),
+    updatedAt: Date.UTC(2026, 4, 5),
+    syncId: 'sync-default',
+  };
+
+  const merged = { ...base, ...overrides };
+  return {
+    ...merged,
+    occurredAt: overrides.occurredAt ?? overrides.createdAt ?? base.occurredAt,
+  };
+};
 
 describe('spendingAnalytics', () => {
   test('allocates equal split usage to both payer and debtor (100 => 50 / 50)', () => {
@@ -56,6 +64,7 @@ describe('spendingAnalytics', () => {
           { userId: 'carol', amount: 40, isPaid: false },
         ],
         createdAt: Date.UTC(2026, 4, 3),
+        occurredAt: Date.UTC(2026, 4, 3),
       }),
       baseTransaction({
         id: 'custom-2',
@@ -68,6 +77,7 @@ describe('spendingAnalytics', () => {
           { userId: 'carol', amount: 20, isPaid: false },
         ],
         createdAt: Date.UTC(2026, 4, 8),
+        occurredAt: Date.UTC(2026, 4, 8),
       }),
       baseTransaction({
         id: 'old-1',
@@ -80,6 +90,7 @@ describe('spendingAnalytics', () => {
           { userId: 'bob', amount: 50, isPaid: false },
         ],
         createdAt: Date.UTC(2026, 3, 25),
+        occurredAt: Date.UTC(2026, 3, 25),
       }),
     ];
 
@@ -103,6 +114,7 @@ describe('spendingAnalytics', () => {
         convertedAmount: 100,
         splits: [{ userId: 'bob', amount: 50, isPaid: false }],
         createdAt: Date.UTC(2026, 4, 3),
+        occurredAt: Date.UTC(2026, 4, 3),
       }),
       baseTransaction({
         id: 'all-2',
@@ -111,6 +123,7 @@ describe('spendingAnalytics', () => {
         convertedAmount: 0,
         splits: [{ userId: 'alice', amount: 0, isPaid: false }],
         createdAt: Date.UTC(2026, 4, 4),
+        occurredAt: Date.UTC(2026, 4, 4),
       }),
       baseTransaction({
         id: 'all-3',
@@ -123,6 +136,7 @@ describe('spendingAnalytics', () => {
           { userId: 'bob', amount: 20, isPaid: false },
         ],
         createdAt: Date.UTC(2026, 3, 12),
+        occurredAt: Date.UTC(2026, 3, 12),
       }),
     ];
 

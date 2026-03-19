@@ -1,4 +1,3 @@
-export * from './AddAcquisitionScreen';
 export * from './AddTransactionScreen';
 export * from './CurrencyWalletScreen';
 export * from './EditTransactionScreen';

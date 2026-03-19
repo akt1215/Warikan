@@ -21,9 +21,12 @@ export interface Transaction {
   splitType: SplitType;
   splits: Split[];
   createdBy: string;
+  occurredAt: number;
   createdAt: number;
   updatedAt: number;
   syncId: string;
+  appliedRateType?: 'acquisition' | 'market';
+  appliedRateValue?: number | null;
 }
 
 export interface TransactionInput {
@@ -38,6 +41,9 @@ export interface TransactionInput {
   splitType: SplitType;
   splits: Split[];
   createdBy: string;
+  occurredAt: number;
+  appliedRateType?: 'acquisition' | 'market';
+  appliedRateValue?: number | null;
 }
 
 export type TransactionEditableInput = Omit<TransactionInput, 'createdBy'>;

@@ -198,6 +198,14 @@ const parseTransaction = (value: unknown): Transaction | null => {
     return null;
   }
 
+  const occurredAt = typeof value.occurredAt === 'number' ? value.occurredAt : value.createdAt;
+  const appliedRateType = value.appliedRateType === 'acquisition' || value.appliedRateType === 'market'
+    ? value.appliedRateType
+    : undefined;
+  const appliedRateValue = typeof value.appliedRateValue === 'number' || value.appliedRateValue === null
+    ? value.appliedRateValue
+    : undefined;
+
   return {
     id: value.id,
     groupId: value.groupId,
@@ -213,9 +221,12 @@ const parseTransaction = (value: unknown): Transaction | null => {
     splitType,
     splits,
     createdBy: value.createdBy,
+    occurredAt,
     createdAt: value.createdAt,
     updatedAt: value.updatedAt,
     syncId: value.syncId,
+    appliedRateType,
+    appliedRateValue,
   };
 };
 

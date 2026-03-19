@@ -92,6 +92,7 @@ export const useTransactionStore = create<TransactionStoreState>((set) => ({
       id: generateId(),
       syncId: generateId(),
       ...input,
+      occurredAt: input.occurredAt,
       createdAt: timestamp,
       updatedAt: timestamp,
     };
@@ -128,6 +129,7 @@ export const useTransactionStore = create<TransactionStoreState>((set) => ({
       syncId: existing.syncId,
       createdAt: existing.createdAt,
       createdBy: existing.createdBy,
+      occurredAt: input.occurredAt,
       updatedAt: Date.now(),
     };
 

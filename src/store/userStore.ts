@@ -10,7 +10,11 @@ interface UserStoreState {
   hasHydrated: boolean;
   initialize: () => Promise<void>;
   createUser: (name: string, baseCurrency: string) => Promise<User>;
-  updateProfile: (updates: { name: string; baseCurrency: string }) => Promise<void>;
+  updateProfile: (updates: {
+    name: string;
+    baseCurrency: string;
+    favoriteCurrencies?: string[];
+  }) => Promise<void>;
   setLastSyncedAt: (timestamp: number) => Promise<void>;
   clearState: () => void;
 }
@@ -37,6 +41,7 @@ export const useUserStore = create<UserStoreState>((set, get) => ({
       id: generateId(),
       name: name.trim(),
       baseCurrency,
+      favoriteCurrencies: [],
       createdAt: timestamp,
       updatedAt: timestamp,
       lastSyncedAt: 0,
@@ -49,16 +54,21 @@ export const useUserStore = create<UserStoreState>((set, get) => ({
     return user;
   },
 
-  updateProfile: async ({ name, baseCurrency }) => {
+  updateProfile: async ({ name, baseCurrency, favoriteCurrencies }) => {
     const current = get().user;
     if (!current) {
       throw new Error('No user exists.');
     }
 
+    const normalizedFavorites = favoriteCurrencies
+      ? Array.from(new Set(favoriteCurrencies.map((entry) => entry.trim()).filter(Boolean)))
+      : current.favoriteCurrencies;
+
     const updated: User = {
       ...current,
       name: name.trim(),
       baseCurrency,
+      favoriteCurrencies: normalizedFavorites,
       updatedAt: Date.now(),
     };
 

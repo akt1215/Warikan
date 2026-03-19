@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS users (
   id TEXT PRIMARY KEY NOT NULL,
   name TEXT NOT NULL,
   baseCurrency TEXT NOT NULL,
+  favoriteCurrencies TEXT NOT NULL DEFAULT '[]',
   createdAt INTEGER NOT NULL,
   updatedAt INTEGER NOT NULL,
   lastSyncedAt INTEGER NOT NULL
@@ -39,9 +40,12 @@ CREATE TABLE IF NOT EXISTS transactions (
   splitType TEXT NOT NULL,
   splits TEXT NOT NULL,
   createdBy TEXT NOT NULL,
+  occurredAt INTEGER NOT NULL DEFAULT 0,
   createdAt INTEGER NOT NULL,
   updatedAt INTEGER NOT NULL,
-  syncId TEXT NOT NULL UNIQUE
+  syncId TEXT NOT NULL UNIQUE,
+  appliedRateType TEXT,
+  appliedRateValue REAL
 );
 
 CREATE TABLE IF NOT EXISTS currency_acquisitions (
@@ -92,6 +96,55 @@ const ensureTransactionLabelColumn = async (
   );
 };
 
+const ensureUserFavoriteCurrenciesColumn = async (
+  database: SQLite.SQLiteDatabase,
+): Promise<void> => {
+  const columns = await database.getAllAsync<TableInfoRow>('PRAGMA table_info(users)');
+  if (columns.some((column) => column.name === 'favoriteCurrencies')) {
+    return;
+  }
+
+  await database.runAsync(
+    `ALTER TABLE users ADD COLUMN favoriteCurrencies TEXT NOT NULL DEFAULT '[]'`,
+  );
+};
+
+const ensureTransactionOccurredAtColumn = async (
+  database: SQLite.SQLiteDatabase,
+): Promise<void> => {
+  const columns = await database.getAllAsync<TableInfoRow>('PRAGMA table_info(transactions)');
+  if (columns.some((column) => column.name === 'occurredAt')) {
+    return;
+  }
+
+  await database.runAsync(
+    'ALTER TABLE transactions ADD COLUMN occurredAt INTEGER NOT NULL DEFAULT 0',
+  );
+
+  await database.runAsync(
+    `UPDATE transactions
+     SET occurredAt = createdAt
+     WHERE occurredAt = 0`,
+  );
+};
+
+const ensureTransactionRateColumns = async (
+  database: SQLite.SQLiteDatabase,
+): Promise<void> => {
+  const columns = await database.getAllAsync<TableInfoRow>('PRAGMA table_info(transactions)');
+  if (!columns.some((column) => column.name === 'appliedRateType')) {
+    await database.runAsync(
+      'ALTER TABLE transactions ADD COLUMN appliedRateType TEXT',
+    );
+  }
+
+  if (!columns.some((column) => column.name === 'appliedRateValue')) {
+    await database.runAsync(
+      'ALTER TABLE transactions ADD COLUMN appliedRateValue REAL',
+    );
+  }
+};
+
 const backfillLegacyTransactionLabels = async (
   database: SQLite.SQLiteDatabase,
 ): Promise<void> => {
@@ -134,6 +187,9 @@ export const getDatabase = async (): Promise<SQLite.SQLiteDatabase> => {
 export const initializeDatabase = async (): Promise<void> => {
   const database = await getDatabase();
   await database.execAsync(SCHEMA_SQL);
+  await ensureUserFavoriteCurrenciesColumn(database);
   await ensureTransactionLabelColumn(database);
+  await ensureTransactionOccurredAtColumn(database);
+  await ensureTransactionRateColumns(database);
   await backfillLegacyTransactionLabels(database);
 };

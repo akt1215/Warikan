@@ -20,6 +20,5 @@ export type RootStackParamList = {
   TransactionDetail: { transactionId: string };
   EditTransaction: { transactionId: string };
   CurrencyWallet: undefined;
-  AddAcquisition: undefined;
   QRSync: undefined;
 };

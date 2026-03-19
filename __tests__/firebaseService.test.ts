@@ -51,24 +51,32 @@ const baseGroup = (overrides: Partial<Group>): Group => ({
   ...overrides,
 });
 
-const baseTransaction = (overrides: Partial<Transaction>): Transaction => ({
-  id: 'tx-1',
-  groupId: 'group-local',
-  label: 'Trip',
-  payerId: 'user-1',
-  amount: 100,
-  originalCurrency: 'USD',
-  fee: 0,
-  convertedAmount: 100,
-  note: 'Lunch',
-  splitType: 'equal',
-  splits: [{ userId: 'user-2', amount: 50, isPaid: false }],
-  createdBy: 'user-1',
-  createdAt: 100,
-  updatedAt: 100,
-  syncId: 'sync-1',
-  ...overrides,
-});
+const baseTransaction = (overrides: Partial<Transaction>): Transaction => {
+  const base: Transaction = {
+    id: 'tx-1',
+    groupId: 'group-local',
+    label: 'Trip',
+    payerId: 'user-1',
+    amount: 100,
+    originalCurrency: 'USD',
+    fee: 0,
+    convertedAmount: 100,
+    note: 'Lunch',
+    splitType: 'equal',
+    splits: [{ userId: 'user-2', amount: 50, isPaid: false }],
+    createdBy: 'user-1',
+    occurredAt: 100,
+    createdAt: 100,
+    updatedAt: 100,
+    syncId: 'sync-1',
+  };
+
+  const merged = { ...base, ...overrides };
+  return {
+    ...merged,
+    occurredAt: overrides.occurredAt ?? overrides.createdAt ?? base.occurredAt,
+  };
+};
 
 describe('firebaseService.syncTransactions', () => {
   beforeEach(() => {

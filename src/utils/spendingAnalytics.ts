@@ -31,8 +31,9 @@ export const aggregateUsageByPerson = (
   const totals = new Map<string, number>();
 
   for (const transaction of transactions) {
+    const transactionTimestamp = transaction.occurredAt || transaction.createdAt;
     if (
-      transaction.createdAt < threshold ||
+      transactionTimestamp < threshold ||
       !isPositiveAmount(transaction.convertedAmount)
     ) {
       continue;

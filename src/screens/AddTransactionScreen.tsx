@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Alert, ScrollView, StyleSheet } from 'react-native';
+import { Alert, Platform, ScrollView, StyleSheet, View } from 'react-native';
+import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
 
-import { Button, Typography } from '../components/common';
+import { Button, Card, Input, Picker, Typography } from '../components/common';
 import { TransactionForm, type SplitInputItem } from '../components/transaction';
 import {
   colors,
@@ -11,7 +12,7 @@ import {
   SUPPORTED_CURRENCIES,
   TRANSACTION_LABELS,
 } from '../constants';
-import { convertToBaseCurrency } from '../services';
+import { convertToBaseCurrency, resolveAppliedRate } from '../services';
 import type { Group, SplitType, TransactionEditableInput } from '../types';
 import {
   useCurrencyStore,
@@ -19,12 +20,14 @@ import {
   useTransactionStore,
   useUserStore,
 } from '../store';
-import { isTravelGroup } from '../utils';
+import { formatTimestamp, isTravelGroup } from '../utils';
 
 const toNumber = (value: string): number => {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
 };
+
+type AddEntryMode = 'payment' | 'acquisition';
 
 const getPreferredTravelGroupId = (travelGroups: ReadonlyArray<Group>): string => {
   const defaultGroup = travelGroups.reduce<Group | null>((latest, group) => {
@@ -62,20 +65,13 @@ export const AddTransactionScreen = ({
 
   const acquisitions = useCurrencyStore((state) => state.acquisitions);
   const allAcquisitions = useCurrencyStore((state) => state.allAcquisitions);
+  const addAcquisition = useCurrencyStore((state) => state.addAcquisition);
   const loadAcquisitions = useCurrencyStore((state) => state.loadAcquisitions);
   const refreshMarketRates = useCurrencyStore((state) => state.refreshMarketRates);
   const getMarketRate = useCurrencyStore((state) => state.getMarketRate);
 
   const isEditing = Boolean(editTransactionId);
-
-  const editingTransaction = useMemo(() => {
-    if (!editTransactionId) {
-      return null;
-    }
-
-    return transactions.find((entry) => entry.id === editTransactionId) ?? null;
-  }, [editTransactionId, transactions]);
-
+  const [entryMode, setEntryMode] = useState<AddEntryMode>('payment');
   const [selectedGroupId, setSelectedGroupId] = useState('');
   const [selectedLabel, setSelectedLabel] = useState<string>(DEFAULT_TRANSACTION_LABEL);
   const [amount, setAmount] = useState('');
@@ -86,8 +82,26 @@ export const AddTransactionScreen = ({
   const [note, setNote] = useState('');
   const [splitType, setSplitType] = useState<SplitType>('equal');
   const [customSplitValues, setCustomSplitValues] = useState<SplitInputItem[]>([]);
+  const [occurredAt, setOccurredAt] = useState<number>(Date.now());
+  const [isDatePickerVisible, setIsDatePickerVisible] = useState(false);
+  const [isTimePickerVisible, setIsTimePickerVisible] = useState(false);
+  const [showAllCurrencies, setShowAllCurrencies] = useState(false);
+  const [acquisitionCurrency, setAcquisitionCurrency] = useState<string>(
+    user?.favoriteCurrencies[0] ?? user?.baseCurrency ?? 'USD',
+  );
+  const [acquisitionAmount, setAcquisitionAmount] = useState('');
+  const [acquisitionPaidAmount, setAcquisitionPaidAmount] = useState('');
+  const [acquisitionNote, setAcquisitionNote] = useState('');
   const [isEditFormInitialized, setIsEditFormInitialized] = useState(false);
   const [hasRequestedEditLoad, setHasRequestedEditLoad] = useState(false);
+
+  const editingTransaction = useMemo(() => {
+    if (!editTransactionId) {
+      return null;
+    }
+
+    return transactions.find((entry) => entry.id === editTransactionId) ?? null;
+  }, [editTransactionId, transactions]);
 
   useEffect(() => {
     if (!user) {
@@ -112,9 +126,7 @@ export const AddTransactionScreen = ({
     setIsEditFormInitialized(false);
   }, [editTransactionId]);
 
-  const travelGroups = useMemo(() => {
-    return groups.filter(isTravelGroup);
-  }, [groups]);
+  const travelGroups = useMemo(() => groups.filter(isTravelGroup), [groups]);
 
   useEffect(() => {
     if (travelGroups.length === 0) {
@@ -134,6 +146,7 @@ export const AddTransactionScreen = ({
       return;
     }
 
+    const occurredAt = editingTransaction.occurredAt || editingTransaction.createdAt;
     setSelectedGroupId(editingTransaction.groupId);
     setSelectedLabel(editingTransaction.label.trim() || DEFAULT_TRANSACTION_LABEL);
     setAmount(String(editingTransaction.amount));
@@ -152,28 +165,75 @@ export const AddTransactionScreen = ({
           }))
         : [],
     );
+    setOccurredAt(occurredAt);
     setIsEditFormInitialized(true);
   }, [editingTransaction, isEditFormInitialized, isEditing]);
 
-  const currencyOptions = useMemo(() => {
+  useEffect(() => {
+    if (user) {
+      setAcquisitionCurrency((current) => current || user.favoriteCurrencies[0] || user.baseCurrency);
+    }
+  }, [user]);
+
+  const dynamicCurrencies = useMemo(() => {
+    return Array.from(new Set([
+      ...acquisitions.map((entry) => entry.currency),
+      currency,
+      acquisitionCurrency,
+      ...(user?.favoriteCurrencies ?? []),
+      user?.baseCurrency ?? '',
+    ])).filter(Boolean);
+  }, [acquisitionCurrency, acquisitions, currency, user?.baseCurrency, user?.favoriteCurrencies]);
+
+  const favoriteCurrencies = useMemo(() => {
+    if (!user) {
+      return [];
+    }
+
+    const favorites = user.favoriteCurrencies
+      .map((entry) => entry.trim())
+      .filter(Boolean);
+
+    if (favorites.length === 0) {
+      return [];
+    }
+
+    const withCurrent = favorites.includes(currency)
+      ? favorites
+      : [...favorites, currency];
+    return Array.from(new Set(withCurrent)).filter((entry) =>
+      dynamicCurrencies.includes(entry) || SUPPORTED_CURRENCIES.includes(entry as (typeof SUPPORTED_CURRENCIES)[number]),
+    );
+  }, [currency, dynamicCurrencies, user]);
+
+  const allCurrencyOptions = useMemo(() => {
     const fromSupported = SUPPORTED_CURRENCIES.map((entry) => ({
       label: formatCurrencyLabel(entry),
       flagCurrency: entry,
       value: entry,
     }));
 
-    const dynamicCurrencies = Array.from(new Set([
-      ...acquisitions.map((entry) => entry.currency),
-      currency,
-    ]));
-
     const fromAcquisitions = dynamicCurrencies
-      .filter(Boolean)
       .filter((entry) => !SUPPORTED_CURRENCIES.includes(entry as (typeof SUPPORTED_CURRENCIES)[number]))
       .map((entry) => ({ label: formatCurrencyLabel(entry), value: entry }));
 
     return [...fromSupported, ...fromAcquisitions];
-  }, [acquisitions, currency]);
+  }, [dynamicCurrencies]);
+
+  const favoriteCurrencyOptions = useMemo(() => {
+    const set = new Set(favoriteCurrencies);
+    return allCurrencyOptions.filter((option) => set.has(option.value));
+  }, [allCurrencyOptions, favoriteCurrencies]);
+
+  const selectableCurrencyOptions = useMemo(() => {
+    if (showAllCurrencies || favoriteCurrencyOptions.length === 0) {
+      return allCurrencyOptions;
+    }
+
+    return favoriteCurrencyOptions;
+  }, [allCurrencyOptions, favoriteCurrencyOptions, showAllCurrencies]);
+
+  const acquisitionCurrencyOptions = useMemo(() => allCurrencyOptions, [allCurrencyOptions]);
 
   const labelOptions = useMemo(() => {
     return TRANSACTION_LABELS.map((entry) => ({
@@ -218,9 +278,7 @@ export const AddTransactionScreen = ({
   }, [selectedGroup, selectedPayerId]);
 
   const debtorLabelById = useMemo(() => {
-    return Object.fromEntries(
-      debtorOptions.map((option) => [option.value, option.label]),
-    ) as Record<string, string>;
+    return Object.fromEntries(debtorOptions.map((option) => [option.value, option.label])) as Record<string, string>;
   }, [debtorOptions]);
 
   useEffect(() => {
@@ -238,7 +296,6 @@ export const AddTransactionScreen = ({
       user && groupMemberIds.includes(user.id)
         ? user.id
         : selectedGroup.members[0]?.id ?? '';
-
     setSelectedPayerId(defaultPayerId);
   }, [selectedGroup, selectedPayerId, user]);
 
@@ -247,7 +304,6 @@ export const AddTransactionScreen = ({
     const allDebtors = debtorOptions.map((option) => option.value);
     setSelectedDebtorIds((previous) => {
       const filtered = previous.filter((id) => validIds.has(id));
-
       if (filtered.length === 0) {
         return allDebtors;
       }
@@ -291,9 +347,7 @@ export const AddTransactionScreen = ({
 
   const updateCustomSplit = (userId: string, splitAmount: number): void => {
     setCustomSplitValues((previous) =>
-      previous.map((entry) =>
-        entry.userId === userId ? { ...entry, amount: splitAmount } : entry,
-      ),
+      previous.map((entry) => (entry.userId === userId ? { ...entry, amount: splitAmount } : entry)),
     );
   };
 
@@ -341,16 +395,80 @@ export const AddTransactionScreen = ({
     setCustomSplitValues([]);
   };
 
-  const resetForm = (): void => {
+  const resetPaymentForm = (): void => {
     setAmount('');
     setFee('0');
     setSelectedDebtorIds([]);
     setNote('');
     setSplitType('equal');
     setCustomSplitValues([]);
+    setOccurredAt(Date.now());
   };
 
-  const handleSave = async (): Promise<void> => {
+  const resetAcquisitionForm = (): void => {
+    setAcquisitionAmount('');
+    setAcquisitionPaidAmount('');
+    setAcquisitionNote('');
+  };
+
+  const handleSaveAcquisition = async (): Promise<void> => {
+    if (!user) {
+      return;
+    }
+
+    const parsedAmount = toNumber(acquisitionAmount);
+    const parsedPaidAmount = toNumber(acquisitionPaidAmount);
+
+    if (parsedAmount <= 0 || parsedPaidAmount <= 0) {
+      Alert.alert('Invalid values', 'Amount and paid amount must be greater than zero.');
+      return;
+    }
+
+    try {
+      await addAcquisition(user.id, {
+        currency: acquisitionCurrency,
+        amount: parsedAmount,
+        paidAmount: parsedPaidAmount,
+        acquiredAt: Date.now(),
+        note: acquisitionNote.trim() || undefined,
+      });
+
+      Alert.alert('Saved', 'Currency acquisition added.');
+      resetAcquisitionForm();
+    } catch (error) {
+      Alert.alert('Could not save', error instanceof Error ? error.message : 'Unknown error.');
+    }
+  };
+
+  const handleDateChange = (event: DateTimePickerEvent, selectedDate?: Date): void => {
+    if (Platform.OS === 'android') {
+      setIsDatePickerVisible(false);
+    }
+
+    if (event.type !== 'set' || !selectedDate) {
+      return;
+    }
+
+    const current = new Date(occurredAt);
+    current.setFullYear(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate());
+    setOccurredAt(current.getTime());
+  };
+
+  const handleTimeChange = (event: DateTimePickerEvent, selectedDate?: Date): void => {
+    if (Platform.OS === 'android') {
+      setIsTimePickerVisible(false);
+    }
+
+    if (event.type !== 'set' || !selectedDate) {
+      return;
+    }
+
+    const current = new Date(occurredAt);
+    current.setHours(selectedDate.getHours(), selectedDate.getMinutes(), 0, 0);
+    setOccurredAt(current.getTime());
+  };
+
+  const handleSaveTransaction = async (): Promise<void> => {
     if (!user) {
       return;
     }
@@ -442,6 +560,14 @@ export const AddTransactionScreen = ({
         return;
       }
 
+      const resolvedRate = resolveAppliedRate({
+        fromCurrency: currency,
+        baseCurrency: user.baseCurrency,
+        acquisitions: allAcquisitions,
+        acquisitionOwnerId: selectedPayerId,
+        marketRate,
+      });
+
       const transactionInput: TransactionEditableInput = {
         groupId: selectedGroupId,
         label: selectedLabel,
@@ -453,6 +579,9 @@ export const AddTransactionScreen = ({
         note: note.trim() || 'Expense',
         splitType,
         splits,
+        occurredAt,
+        appliedRateType: resolvedRate?.rateType,
+        appliedRateValue: resolvedRate?.rateValue ?? null,
       };
 
       if (isEditing && editingTransaction) {
@@ -468,7 +597,7 @@ export const AddTransactionScreen = ({
       });
 
       Alert.alert('Saved', 'Transaction added successfully.');
-      resetForm();
+      resetPaymentForm();
     } catch (error) {
       Alert.alert(
         isEditing ? 'Could not update transaction' : 'Could not save transaction',
@@ -497,34 +626,148 @@ export const AddTransactionScreen = ({
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <TransactionForm
-        amount={amount}
-        currency={currency}
-        currencyOptions={currencyOptions}
-        customSplitValues={customSplitValues}
-        fee={fee}
-        groupOptions={groupOptions}
-        labelOptions={labelOptions}
-        note={note}
-        onAmountChange={setAmount}
-        onCurrencyChange={setCurrency}
-        onCustomSplitChange={updateCustomSplit}
-        onPayerChange={handlePayerChange}
-        onToggleDebtor={toggleDebtor}
-        onFeeChange={setFee}
-        onGroupChange={handleGroupChange}
-        onLabelChange={setSelectedLabel}
-        onNoteChange={setNote}
-        onSplitTypeChange={setSplitType}
-        debtorOptions={debtorOptions}
-        payerOptions={payerOptions}
-        selectedGroupId={selectedGroupId}
-        selectedLabel={selectedLabel}
-        selectedDebtorIds={selectedDebtorIds}
-        selectedPayerId={selectedPayerId}
-        splitType={splitType}
-      />
-      <Button onPress={() => void handleSave()} title={isEditing ? 'Save Changes' : 'Save Transaction'} />
+      {!isEditing ? (
+        <View style={styles.modeSwitchRow}>
+          <Button
+            onPress={() => setEntryMode('payment')}
+            title="Payment"
+            variant={entryMode === 'payment' ? 'primary' : 'secondary'}
+          />
+          <Button
+            onPress={() => setEntryMode('acquisition')}
+            title="Currency Acquisition"
+            variant={entryMode === 'acquisition' ? 'primary' : 'secondary'}
+          />
+        </View>
+      ) : null}
+
+      {entryMode === 'payment' || isEditing ? (
+        <>
+          <Card>
+            <Typography variant="h4">When did this happen?</Typography>
+            <Typography variant="caption">
+              Current selection: {formatTimestamp(occurredAt, 'PP p')}
+            </Typography>
+            <View style={styles.dateTimeActions}>
+              <Button
+                onPress={() => {
+                  if (Platform.OS === 'ios') {
+                    setIsDatePickerVisible((previous) => !previous);
+                    return;
+                  }
+
+                  setIsDatePickerVisible(true);
+                }}
+                title="Change Date"
+                variant="secondary"
+              />
+              <Button
+                onPress={() => {
+                  if (Platform.OS === 'ios') {
+                    setIsTimePickerVisible((previous) => !previous);
+                    return;
+                  }
+
+                  setIsTimePickerVisible(true);
+                }}
+                title="Change Time"
+                variant="secondary"
+              />
+            </View>
+            <Typography variant="caption">
+              Use the native picker controls above to edit date and time.
+            </Typography>
+            {isDatePickerVisible ? (
+              <DateTimePicker
+                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                mode="date"
+                onChange={handleDateChange}
+                style={styles.pickerInline}
+                value={new Date(occurredAt)}
+              />
+            ) : null}
+            {isTimePickerVisible ? (
+              <DateTimePicker
+                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                mode="time"
+                onChange={handleTimeChange}
+                style={styles.pickerInline}
+                value={new Date(occurredAt)}
+              />
+            ) : null}
+          </Card>
+
+          <TransactionForm
+            amount={amount}
+            currency={currency}
+            currencyOptions={selectableCurrencyOptions}
+            customSplitValues={customSplitValues}
+            fee={fee}
+            groupOptions={groupOptions}
+            labelOptions={labelOptions}
+            note={note}
+            onAmountChange={setAmount}
+            onCurrencyChange={setCurrency}
+            onCustomSplitChange={updateCustomSplit}
+            onPayerChange={handlePayerChange}
+            onToggleDebtor={toggleDebtor}
+            onFeeChange={setFee}
+            onGroupChange={handleGroupChange}
+            onLabelChange={setSelectedLabel}
+            onNoteChange={setNote}
+            onSplitTypeChange={setSplitType}
+            onToggleCurrencyVisibility={() => setShowAllCurrencies((previous) => !previous)}
+            debtorOptions={debtorOptions}
+            payerOptions={payerOptions}
+            selectedGroupId={selectedGroupId}
+            selectedLabel={selectedLabel}
+            selectedDebtorIds={selectedDebtorIds}
+            selectedPayerId={selectedPayerId}
+            showAllCurrencies={showAllCurrencies}
+            showCurrencyVisibilityToggle={favoriteCurrencyOptions.length > 0}
+            splitType={splitType}
+          />
+          <Button
+            onPress={() => {
+              void handleSaveTransaction();
+            }}
+            title={isEditing ? 'Save Changes' : 'Save Transaction'}
+          />
+        </>
+      ) : (
+        <Card>
+          <Typography variant="h4">Add Currency Acquisition</Typography>
+          <Picker
+            label="Currency"
+            onValueChange={setAcquisitionCurrency}
+            options={acquisitionCurrencyOptions}
+            selectedValue={acquisitionCurrency}
+          />
+          <Input
+            keyboardType="decimal-pad"
+            label="Amount received"
+            onChangeText={setAcquisitionAmount}
+            value={acquisitionAmount}
+          />
+          <Input
+            keyboardType="decimal-pad"
+            label={`Amount paid (${user?.baseCurrency ?? 'USD'})`}
+            onChangeText={setAcquisitionPaidAmount}
+            value={acquisitionPaidAmount}
+          />
+          <Input
+            label="Note (optional)"
+            onChangeText={setAcquisitionNote}
+            value={acquisitionNote}
+          />
+          <Button
+            onPress={() => {
+              void handleSaveAcquisition();
+            }}
+            title="Save Acquisition"
+          />
+        </Card>
+      )}
     </ScrollView>
   );
 };
@@ -537,5 +780,17 @@ const styles = StyleSheet.create({
   content: {
     gap: spacing.lg,
     padding: spacing.md,
+  },
+  modeSwitchRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  dateTimeActions: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginTop: spacing.md,
+  },
+  pickerInline: {
+    marginTop: spacing.sm,
   },
 });

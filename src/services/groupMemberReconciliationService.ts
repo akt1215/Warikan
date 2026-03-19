@@ -57,7 +57,11 @@ const collectParticipantsByGroup = (
     }
 
     const existing = participantsByGroup.get(groupId) ?? new Map<string, number>();
-    const timestamp = Number.isFinite(transaction.createdAt) ? transaction.createdAt : Date.now();
+    const timestamp = Number.isFinite(transaction.occurredAt)
+      ? transaction.occurredAt
+      : Number.isFinite(transaction.createdAt)
+        ? transaction.createdAt
+        : Date.now();
 
     for (const participantId of participantIds) {
       if (!participantId) {
@@ -116,10 +120,7 @@ export const reconcileGroupMembersFromTransactions = ({
   const reconciliationTimestamp = Date.now();
 
   const reconciledGroups = groups.map((group) => {
-    const participants = participantsByGroup.get(group.id);
-    if (!participants || participants.size === 0) {
-      return group;
-    }
+    const participants = participantsByGroup.get(group.id) ?? new Map<string, number>();
 
     const existingMemberIds = new Set(group.members.map((member) => normalizeId(member.id)));
 
@@ -141,16 +142,18 @@ export const reconcileGroupMembersFromTransactions = ({
       .filter((member): member is GroupMember => member !== null);
 
     const missingMembers: GroupMember[] = [];
-    for (const [participantId, joinedAt] of participants.entries()) {
-      if (existingMemberIds.has(participantId)) {
-        continue;
-      }
+    if (participants.size > 0) {
+      for (const [participantId, joinedAt] of participants.entries()) {
+        if (existingMemberIds.has(participantId)) {
+          continue;
+        }
 
-      missingMembers.push({
-        id: participantId,
-        name: profileNames.get(participantId) ?? participantId,
-        joinedAt,
-      });
+        missingMembers.push({
+          id: participantId,
+          name: profileNames.get(participantId) ?? participantId,
+          joinedAt,
+        });
+      }
     }
 
     if (renamedMembers.length === 0 && missingMembers.length === 0) {

@@ -138,10 +138,14 @@ export const QRSyncScreen = (): React.JSX.Element => {
 
       let membersSummary = '';
       if (user) {
+        const mergedProfiles = {
+          ...(parsedPayload.participantProfiles ?? {}),
+          [user.id]: user.name,
+        };
         const reconciliation = await reconcileMembersFromTransactions(
           user.id,
           refreshed,
-          parsedPayload.participantProfiles,
+          mergedProfiles,
         );
 
         if (reconciliation.membersAdded > 0) {
