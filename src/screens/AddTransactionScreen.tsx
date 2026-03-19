@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Alert, ScrollView, StyleSheet } from 'react-native';
 
-import { Button } from '../components/common';
+import { Button, Typography } from '../components/common';
 import { TransactionForm, type SplitInputItem } from '../components/transaction';
 import {
   colors,
@@ -12,7 +12,7 @@ import {
   TRANSACTION_LABELS,
 } from '../constants';
 import { convertToBaseCurrency } from '../services';
-import type { Group, SplitType } from '../types';
+import type { Group, SplitType, TransactionEditableInput } from '../types';
 import {
   useCurrencyStore,
   useGroupStore,
@@ -42,17 +42,39 @@ const getPreferredTravelGroupId = (travelGroups: ReadonlyArray<Group>): string =
   return defaultGroup?.id ?? travelGroups[0]?.id ?? '';
 };
 
-export const AddTransactionScreen = (): React.JSX.Element => {
+interface AddTransactionScreenProps {
+  editTransactionId?: string;
+  onSaved?: () => void;
+}
+
+export const AddTransactionScreen = ({
+  editTransactionId,
+  onSaved,
+}: AddTransactionScreenProps = {}): React.JSX.Element => {
   const user = useUserStore((state) => state.user);
   const groups = useGroupStore((state) => state.groups);
   const loadGroups = useGroupStore((state) => state.loadGroups);
+  const transactions = useTransactionStore((state) => state.transactions);
+  const isTransactionsLoading = useTransactionStore((state) => state.isLoading);
+  const loadTransactions = useTransactionStore((state) => state.loadTransactions);
   const addTransaction = useTransactionStore((state) => state.addTransaction);
+  const updateTransaction = useTransactionStore((state) => state.updateTransaction);
 
   const acquisitions = useCurrencyStore((state) => state.acquisitions);
   const allAcquisitions = useCurrencyStore((state) => state.allAcquisitions);
   const loadAcquisitions = useCurrencyStore((state) => state.loadAcquisitions);
   const refreshMarketRates = useCurrencyStore((state) => state.refreshMarketRates);
   const getMarketRate = useCurrencyStore((state) => state.getMarketRate);
+
+  const isEditing = Boolean(editTransactionId);
+
+  const editingTransaction = useMemo(() => {
+    if (!editTransactionId) {
+      return null;
+    }
+
+    return transactions.find((entry) => entry.id === editTransactionId) ?? null;
+  }, [editTransactionId, transactions]);
 
   const [selectedGroupId, setSelectedGroupId] = useState('');
   const [selectedLabel, setSelectedLabel] = useState<string>(DEFAULT_TRANSACTION_LABEL);
@@ -64,6 +86,8 @@ export const AddTransactionScreen = (): React.JSX.Element => {
   const [note, setNote] = useState('');
   const [splitType, setSplitType] = useState<SplitType>('equal');
   const [customSplitValues, setCustomSplitValues] = useState<SplitInputItem[]>([]);
+  const [isEditFormInitialized, setIsEditFormInitialized] = useState(false);
+  const [hasRequestedEditLoad, setHasRequestedEditLoad] = useState(false);
 
   useEffect(() => {
     if (!user) {
@@ -75,13 +99,26 @@ export const AddTransactionScreen = (): React.JSX.Element => {
     void refreshMarketRates(user.baseCurrency);
   }, [loadAcquisitions, loadGroups, refreshMarketRates, user]);
 
+  useEffect(() => {
+    if (!isEditing) {
+      return;
+    }
+
+    setHasRequestedEditLoad(true);
+    void loadTransactions();
+  }, [isEditing, loadTransactions]);
+
+  useEffect(() => {
+    setIsEditFormInitialized(false);
+  }, [editTransactionId]);
+
   const travelGroups = useMemo(() => {
     return groups.filter(isTravelGroup);
   }, [groups]);
 
   useEffect(() => {
     if (travelGroups.length === 0) {
-      if (selectedGroupId) {
+      if (selectedGroupId && !isEditing) {
         setSelectedGroupId('');
       }
       return;
@@ -90,7 +127,33 @@ export const AddTransactionScreen = (): React.JSX.Element => {
     if (!travelGroups.some((group) => group.id === selectedGroupId)) {
       setSelectedGroupId(getPreferredTravelGroupId(travelGroups));
     }
-  }, [selectedGroupId, travelGroups]);
+  }, [isEditing, selectedGroupId, travelGroups]);
+
+  useEffect(() => {
+    if (!isEditing || !editingTransaction || isEditFormInitialized) {
+      return;
+    }
+
+    setSelectedGroupId(editingTransaction.groupId);
+    setSelectedLabel(editingTransaction.label.trim() || DEFAULT_TRANSACTION_LABEL);
+    setAmount(String(editingTransaction.amount));
+    setCurrency(editingTransaction.originalCurrency);
+    setFee(String(editingTransaction.fee));
+    setSelectedPayerId(editingTransaction.payerId);
+    setSelectedDebtorIds(editingTransaction.splits.map((split) => split.userId));
+    setNote(editingTransaction.note);
+    setSplitType(editingTransaction.splitType);
+    setCustomSplitValues(
+      editingTransaction.splitType === 'custom'
+        ? editingTransaction.splits.map((split) => ({
+            userId: split.userId,
+            label: split.userId,
+            amount: split.amount,
+          }))
+        : [],
+    );
+    setIsEditFormInitialized(true);
+  }, [editingTransaction, isEditFormInitialized, isEditing]);
 
   const currencyOptions = useMemo(() => {
     const fromSupported = SUPPORTED_CURRENCIES.map((entry) => ({
@@ -99,14 +162,18 @@ export const AddTransactionScreen = (): React.JSX.Element => {
       value: entry,
     }));
 
-    const fromAcquisitions = acquisitions
-      .map((entry) => entry.currency)
-      .filter((entry, index, all) => all.indexOf(entry) === index)
+    const dynamicCurrencies = Array.from(new Set([
+      ...acquisitions.map((entry) => entry.currency),
+      currency,
+    ]));
+
+    const fromAcquisitions = dynamicCurrencies
+      .filter(Boolean)
       .filter((entry) => !SUPPORTED_CURRENCIES.includes(entry as (typeof SUPPORTED_CURRENCIES)[number]))
       .map((entry) => ({ label: formatCurrencyLabel(entry), value: entry }));
 
     return [...fromSupported, ...fromAcquisitions];
-  }, [acquisitions]);
+  }, [acquisitions, currency]);
 
   const labelOptions = useMemo(() => {
     return TRANSACTION_LABELS.map((entry) => ({
@@ -288,6 +355,16 @@ export const AddTransactionScreen = (): React.JSX.Element => {
       return;
     }
 
+    if (isEditing && !editingTransaction) {
+      Alert.alert('Missing transaction', 'The transaction could not be loaded for editing.');
+      return;
+    }
+
+    if (isEditing && editingTransaction?.createdBy !== user.id) {
+      Alert.alert('Not allowed', 'You can only edit transactions you created.');
+      return;
+    }
+
     const parsedAmount = toNumber(amount);
     const parsedFee = toNumber(fee);
 
@@ -365,7 +442,7 @@ export const AddTransactionScreen = (): React.JSX.Element => {
         return;
       }
 
-      await addTransaction({
+      const transactionInput: TransactionEditableInput = {
         groupId: selectedGroupId,
         label: selectedLabel,
         payerId: selectedPayerId,
@@ -376,6 +453,17 @@ export const AddTransactionScreen = (): React.JSX.Element => {
         note: note.trim() || 'Expense',
         splitType,
         splits,
+      };
+
+      if (isEditing && editingTransaction) {
+        await updateTransaction(editingTransaction.id, transactionInput, user.id);
+        Alert.alert('Saved', 'Transaction updated successfully.');
+        onSaved?.();
+        return;
+      }
+
+      await addTransaction({
+        ...transactionInput,
         createdBy: user.id,
       });
 
@@ -383,13 +471,29 @@ export const AddTransactionScreen = (): React.JSX.Element => {
       resetForm();
     } catch (error) {
       Alert.alert(
-        'Could not save transaction',
+        isEditing ? 'Could not update transaction' : 'Could not save transaction',
         error instanceof Error
           ? error.message
           : 'Could not convert currency or save transaction.',
       );
     }
   };
+
+  if (isEditing && !editingTransaction) {
+    const isLoadingEditTransaction = !hasRequestedEditLoad || isTransactionsLoading;
+    return (
+      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+        <Typography variant="h4">
+          {isLoadingEditTransaction ? 'Loading transaction...' : 'Transaction unavailable'}
+        </Typography>
+        <Typography variant="bodySmall">
+          {isLoadingEditTransaction
+            ? 'Please wait while we load the transaction details.'
+            : 'This transaction could not be found. It may have been deleted already.'}
+        </Typography>
+      </ScrollView>
+    );
+  }
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -420,7 +524,7 @@ export const AddTransactionScreen = (): React.JSX.Element => {
         selectedPayerId={selectedPayerId}
         splitType={splitType}
       />
-      <Button onPress={() => void handleSave()} title="Save Transaction" />
+      <Button onPress={() => void handleSave()} title={isEditing ? 'Save Changes' : 'Save Transaction'} />
     </ScrollView>
   );
 };

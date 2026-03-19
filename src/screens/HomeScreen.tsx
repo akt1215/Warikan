@@ -3,7 +3,7 @@ import { Alert, ScrollView, StyleSheet, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NavigationProp } from '@react-navigation/native';
 
-import { BalanceOverview } from '../components/balance';
+import { BalanceOverview, SpendingByPersonChart } from '../components/balance';
 import { Card, Typography } from '../components/common';
 import { TransactionCard } from '../components/transaction';
 import { colors, spacing } from '../constants';
@@ -11,7 +11,7 @@ import { useBalance } from '../hooks';
 import type { RootStackParamList } from '../navigation/types';
 import { firebaseService, refreshTransactionsForBalance } from '../services';
 import { useCurrencyStore, useGroupStore, useTransactionStore, useUserStore } from '../store';
-import { isTravelGroup } from '../utils';
+import { aggregateUsageByPerson, isTravelGroup, type SpendingTimeframe } from '../utils';
 
 export const HomeScreen = (): React.JSX.Element => {
   const navigation = useNavigation<NavigationProp<RootStackParamList>>();
@@ -33,6 +33,7 @@ export const HomeScreen = (): React.JSX.Element => {
   const refreshMarketRates = useCurrencyStore((state) => state.refreshMarketRates);
   const getMarketRate = useCurrencyStore((state) => state.getMarketRate);
   const [isRefreshingBalances, setIsRefreshingBalances] = useState(false);
+  const [spendingTimeframe, setSpendingTimeframe] = useState<SpendingTimeframe>('month');
 
   useEffect(() => {
     void loadTransactions();
@@ -77,6 +78,14 @@ export const HomeScreen = (): React.JSX.Element => {
 
     return map;
   }, [groups, user]);
+  const spendingChartItems = useMemo(() => {
+    const totals = aggregateUsageByPerson(transactions, spendingTimeframe);
+    return totals.map((entry) => ({
+      id: entry.personId,
+      name: personNamesById[entry.personId] ?? entry.personId,
+      amount: entry.amount,
+    }));
+  }, [personNamesById, spendingTimeframe, transactions]);
 
   const handleRefreshBalances = async (): Promise<void> => {
     if (!user || isRefreshingBalances) {
@@ -173,6 +182,12 @@ export const HomeScreen = (): React.JSX.Element => {
         personNamesById={personNamesById}
         totalOwedByYou={balances.totalOwedByYou}
         totalOwedToYou={balances.totalOwedToYou}
+      />
+      <SpendingByPersonChart
+        currency={user?.baseCurrency ?? 'USD'}
+        items={spendingChartItems}
+        onTimeframeChange={setSpendingTimeframe}
+        timeframe={spendingTimeframe}
       />
 
       <Card>

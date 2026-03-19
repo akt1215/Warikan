@@ -1,6 +1,11 @@
 import { create } from 'zustand';
 
-import type { Transaction, TransactionInput, TransactionTombstone } from '../types';
+import type {
+  Transaction,
+  TransactionEditableInput,
+  TransactionInput,
+  TransactionTombstone,
+} from '../types';
 import {
   countTransactionsByGroup,
   createTransactionRecord,
@@ -23,6 +28,11 @@ interface TransactionStoreState {
   loadTransactions: () => Promise<void>;
   loadTransactionsByGroup: (groupId: string) => Promise<Transaction[]>;
   addTransaction: (input: TransactionInput) => Promise<Transaction>;
+  updateTransaction: (
+    transactionId: string,
+    input: TransactionEditableInput,
+    userId: string,
+  ) => Promise<Transaction>;
   replaceTransactions: (transactions: Transaction[]) => Promise<void>;
   upsertTombstones: (tombstones: TransactionTombstone[]) => Promise<void>;
   upsertTransactions: (transactions: Transaction[]) => Promise<void>;
@@ -95,6 +105,36 @@ export const useTransactionStore = create<TransactionStoreState>((set) => ({
     }));
 
     return transaction;
+  },
+
+  updateTransaction: async (transactionId, input, userId) => {
+    const existing = useTransactionStore
+      .getState()
+      .transactions.find((transaction) => transaction.id === transactionId)
+      ?? (await getAllTransactions()).find((transaction) => transaction.id === transactionId);
+
+    if (!existing) {
+      throw new Error('Transaction could not be found.');
+    }
+
+    if (existing.createdBy !== userId) {
+      throw new Error('You can only edit transactions you created.');
+    }
+
+    const updatedTransaction: Transaction = {
+      ...existing,
+      ...input,
+      id: existing.id,
+      syncId: existing.syncId,
+      createdAt: existing.createdAt,
+      createdBy: existing.createdBy,
+      updatedAt: Date.now(),
+    };
+
+    await upsertTransactionRecord(updatedTransaction);
+    const updated = await getAllTransactions();
+    set({ transactions: updated });
+    return updatedTransaction;
   },
 
   replaceTransactions: async (transactions) => {

@@ -75,6 +75,41 @@ describe('syncService', () => {
     expect(merged.merged[0]?.note).toBe('New');
   });
 
+  test('merges edited transaction as an update without duplicating syncId', () => {
+    const local: Transaction[] = [
+      baseTransaction({
+        id: 'tx-1',
+        syncId: 'sync-edit-1',
+        amount: 42,
+        note: 'Before edit',
+        updatedAt: 100,
+      }),
+    ];
+
+    const incoming: Transaction[] = [
+      baseTransaction({
+        id: 'tx-1',
+        syncId: 'sync-edit-1',
+        amount: 88,
+        note: 'After edit',
+        updatedAt: 220,
+      }),
+    ];
+
+    const merged = mergeTransactions(local, incoming);
+
+    expect(merged.merged).toHaveLength(1);
+    expect(merged.added).toBe(0);
+    expect(merged.updated).toBe(1);
+    expect(merged.merged[0]).toMatchObject({
+      id: 'tx-1',
+      syncId: 'sync-edit-1',
+      amount: 88,
+      note: 'After edit',
+      updatedAt: 220,
+    });
+  });
+
   test('defaults label when parsing legacy payload without label field', () => {
     const payload = JSON.stringify({
       version: 1,

@@ -10,6 +10,7 @@ import { colors } from '../constants';
 import {
   AddAcquisitionScreen,
   CurrencyWalletScreen,
+  EditTransactionScreen,
   GroupDetailScreen,
   OnboardingScreen,
   QRSyncScreen,
@@ -77,6 +78,11 @@ export const RootNavigator = (): React.JSX.Element => {
           component={TransactionDetailScreen}
           name="TransactionDetail"
           options={{ title: 'Transaction Detail' }}
+        />
+        <Stack.Screen
+          component={EditTransactionScreen}
+          name="EditTransaction"
+          options={{ title: 'Edit Transaction' }}
         />
         <Stack.Screen component={QRSyncScreen} name="QRSync" options={{ title: 'QR Sync' }} />
       </Stack.Navigator>

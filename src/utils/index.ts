@@ -3,3 +3,4 @@ export * from './dateUtils';
 export * from './formatCurrency';
 export * from './generateId';
 export * from './groupClassification';
+export * from './spendingAnalytics';

@@ -1,6 +1,7 @@
 export * from './AddAcquisitionScreen';
 export * from './AddTransactionScreen';
 export * from './CurrencyWalletScreen';
+export * from './EditTransactionScreen';
 export * from './GroupDetailScreen';
 export * from './GroupsScreen';
 export * from './HistoryScreen';

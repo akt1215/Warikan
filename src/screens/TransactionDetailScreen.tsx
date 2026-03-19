@@ -1,9 +1,9 @@
 import React, { useMemo } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
-import { useRoute } from '@react-navigation/native';
-import type { RouteProp } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
+import type { NavigationProp, RouteProp } from '@react-navigation/native';
 
-import { Card, Typography } from '../components/common';
+import { Button, Card, Typography } from '../components/common';
 import { colors, spacing, typography } from '../constants';
 import type { RootStackParamList } from '../navigation/types';
 import type { Group } from '../types';
@@ -37,6 +37,7 @@ const buildPersonNamesById = (
 };
 
 export const TransactionDetailScreen = (): React.JSX.Element => {
+  const navigation = useNavigation<NavigationProp<RootStackParamList>>();
   const route = useRoute<RouteProp<RootStackParamList, 'TransactionDetail'>>();
   const transactions = useTransactionStore((state) => state.transactions);
   const groups = useGroupStore((state) => state.groups);
@@ -74,10 +75,21 @@ export const TransactionDetailScreen = (): React.JSX.Element => {
   const totalPaidOriginal = transaction.amount + transaction.fee;
   const totalOwed = transaction.splits.reduce((sum, split) => sum + split.amount, 0);
   const payerShare = Math.max(transaction.convertedAmount - totalOwed, 0);
+  const canEdit = user?.id === transaction.createdBy;
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Typography variant="h3">{transaction.note || 'Transaction detail'}</Typography>
+      {canEdit ? (
+        <Button
+          onPress={() =>
+            navigation.navigate('EditTransaction', { transactionId: transaction.id })
+          }
+          style={styles.editButton}
+          title="Edit Transaction"
+          variant="secondary"
+        />
+      ) : null}
 
       <Card>
         <Typography variant="caption">Total paid</Typography>
@@ -197,6 +209,9 @@ const styles = StyleSheet.create({
   splitAmount: {
     color: colors.primaryLight,
     fontWeight: typography.weights.semibold,
+  },
+  editButton: {
+    alignSelf: 'flex-start',
   },
   summaryDivider: {
     backgroundColor: colors.border,

@@ -39,3 +39,5 @@ export interface TransactionInput {
   splits: Split[];
   createdBy: string;
 }
+
+export type TransactionEditableInput = Omit<TransactionInput, 'createdBy'>;
